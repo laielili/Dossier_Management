@@ -348,7 +348,7 @@ Playwright, no headless Chromium.
 
 ## Downstream Companion Prompt
 
-`prompt/new_system.md` is the system prompt for the downstream multimodal LLM
+`prompt/system.md` is the system prompt for the downstream multimodal LLM
 that consumes the synthesis PDF. One merged file, two mutually-isolated modes
 routed by a leading token:
 
@@ -376,7 +376,7 @@ html-to-pptx/               vendored browser-side HTML→PPTX converter
                             (dist/html-to-pptx.min.js is the only runtime file)
 queries/{CLINS,FE,CE}.txt   4-dimension page-selection lexicons  (editable)
 classify/{CLINS,FE,CE}.txt  first-page classification anchors     (editable)
-prompt/new_system.md        downstream LLM system prompt (@extract / @summarize)
+prompt/system.md        downstream LLM system prompt (@extract / @summarize)
 listen_folder.txt           saved Listen Folder history (line 1 = active)
 config_overrides.json       UI-persisted overrides (delete_floor, pptx dir)
 index_projects/             page-text index, one JSON per project (no vectors)
