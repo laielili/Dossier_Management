@@ -180,6 +180,38 @@ def set_config_overrides(overrides: dict) -> dict:
     return cur
 
 
+def default_pptx_output_dir() -> str:
+    """System Downloads folder — the default landing place for generated PPTX.
+
+    Windows: %USERPROFILE%\\Downloads. Other OSes: ~/Downloads. Falls back to
+    the home directory if no Downloads folder exists.
+    """
+    home = Path(os.environ.get("USERPROFILE") or Path.home())
+    downloads = home / "Downloads"
+    return str(downloads if downloads.exists() else home)
+
+
+def get_pptx_output_dir() -> str:
+    """Effective HTML→PPTX output folder: user override, else Downloads."""
+    ov = get_config_overrides().get("pptx_output_dir")
+    if ov:
+        return str(Path(str(ov)).expanduser())
+    return default_pptx_output_dir()
+
+
+def set_pptx_output_dir(path: str) -> str:
+    """Persist the HTML→PPTX output folder override. Returns the stored value.
+
+    The path is NOT created here — the API validates/creates it so the user
+    gets an explicit error instead of a silently-made directory.
+    """
+    p = str(Path(str(path)).expanduser()).strip()
+    if not p:
+        raise ValueError("path is required")
+    set_config_overrides({"pptx_output_dir": p})
+    return p
+
+
 def get_delete_floor() -> float:
     """Effective deletion floor: user override if set, else DELETE_SCORE_FLOOR."""
     ov = get_config_overrides().get("delete_floor")

@@ -25,10 +25,17 @@ Endpoints:
   GET  /activity         — Incremental activity feed for the frontend log
   GET  /watch            — Auto-watch state
   POST /watch            — Enable/disable the listen-folder watcher
+  GET  /html2pptx        — Serves the HTML → PPTX converter page
+  GET  /config/pptx-output  — Read the PPTX output folder (default: Downloads)
+  POST /config/pptx-output  — Save the PPTX output folder
+  POST /html2pptx/save   — Write a browser-generated PPTX (base64) to disk
   GET  /                — Serves the frontend UI
 """
 
+import base64
+import binascii
 import os
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -45,11 +52,14 @@ from .config import (
     REPORT_TYPES,
     SCREENSHOTS_DIR,
     DELETE_SCORE_FLOOR,
+    default_pptx_output_dir,
     delete_listen_folder,
     get_listen_folders,
     get_listen_folder,
     get_delete_floor,
+    get_pptx_output_dir,
     set_delete_floor,
+    set_pptx_output_dir,
     project_data_dir,
     set_listen_folder,
 )
@@ -93,6 +103,15 @@ app.mount(
     StaticFiles(directory=str(PROJECT_ROOT / "static")),
     name="static",
 )
+# Serve the vendored html-to-pptx bundle. It is a browser-only library (it reads
+# getComputedStyle / getBoundingClientRect), so the conversion runs inside an
+# off-screen iframe on the client; the server only serves the bundle and writes
+# the resulting bytes to disk. See html-to-pptx/README.md.
+app.mount(
+    "/html-to-pptx",
+    StaticFiles(directory=str(PROJECT_ROOT / "html-to-pptx")),
+    name="html-to-pptx",
+)
 # ---------------------------------------------------------------------------
 # Request models
 # ---------------------------------------------------------------------------
@@ -134,6 +153,24 @@ class WatchRequest(BaseModel):
 class QueriesSaveRequest(BaseModel):
     queries: dict[str, str]
 
+
+class PptxOutputRequest(BaseModel):
+    path: str  # absolute folder where generated .pptx files are written
+
+
+class Html2PptxSaveRequest(BaseModel):
+    """A PPTX produced in the browser, handed to the server for writing.
+
+    ``data_base64`` is the raw pptx (zip) payload produced by
+    ``HtmlToPptx.exportHtmlToPpt(pageClass, "base64")``. It may arrive as a
+    bare base64 string or as a ``data:...;base64,`` URI — both are accepted.
+    """
+
+    filename: str = "presentation"
+    data_base64: str
+    output_dir: Optional[str] = None   # one-off override; omit to use the saved folder
+    overwrite: bool = False            # False → auto-suffix "name (2).pptx"
+
 class ClassifyConfirmRequest(BaseModel):
     decisions: list[dict] = []   # [{"filename": ..., "report_type": ...}]
     # project_id is taken from the query string (consistent with /classify),
@@ -170,6 +207,15 @@ async def index():
     if index_path.exists():
         return HTMLResponse(index_path.read_text(encoding="utf-8"))
     return HTMLResponse("<h2>Frontend not found. Place index.html in static/</h2>")
+
+
+@app.get("/html2pptx", response_class=HTMLResponse)
+async def html2pptx_page():
+    """Serve the HTML → PPTX converter page."""
+    page = PROJECT_ROOT / "static" / "html2pptx.html"
+    if page.exists():
+        return HTMLResponse(page.read_text(encoding="utf-8"))
+    return HTMLResponse("<h2>html2pptx.html not found in static/</h2>", status_code=404)
 
 
 # ---------------------------------------------------------------------------
@@ -722,6 +768,157 @@ async def watch_toggle(req: WatchRequest):
         logger.exception("Watch toggle failed")
         raise HTTPException(500, str(e))
     return {"ok": True, **watcher.status()}
+
+
+# ---------------------------------------------------------------------------
+# HTML → PPTX  (conversion runs in the browser; the server only persists bytes)
+#
+# html-to-pptx walks a *rendered* DOM (getComputedStyle / getBoundingClientRect),
+# so it cannot run under a Python HTML parser. The frontend renders the pasted
+# markup in an off-screen iframe, converts it there, and POSTs the base64 pptx
+# here so it can land in a user-chosen folder (a plain browser download cannot
+# target a specific directory).
+# ---------------------------------------------------------------------------
+
+# Hard cap on an accepted upload. A pptx of slide-deck size is far below this;
+# the limit exists so a malformed/hostile payload cannot exhaust memory or disk.
+MAX_PPTX_BYTES = 80 * 1024 * 1024      # 80 MB decoded
+_UNSAFE_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+# PPTX is a ZIP: every valid file starts with the local-file-header magic "PK\x03\x04".
+_ZIP_MAGIC = b"PK\x03\x04"
+
+
+def _safe_pptx_filename(raw: str) -> str:
+    """Reduce user input to a bare, safe ``*.pptx`` file name.
+
+    Strips any directory component (defeats ``../`` traversal and absolute
+    paths), removes characters Windows rejects, trims trailing dots/spaces,
+    caps the length, and guarantees the .pptx extension.
+    """
+    name = (raw or "").strip()
+    # Kill both separators regardless of host OS, then take the last segment.
+    name = name.replace("\\", "/").split("/")[-1]
+    if name.lower().endswith(".pptx"):
+        name = name[:-5]
+    name = _UNSAFE_FILENAME_CHARS.sub("_", name).strip().strip(".")
+    if not name or set(name) <= {"."}:
+        name = "presentation"
+    return name[:120] + ".pptx"
+
+
+def _unique_path(directory: Path, filename: str) -> Path:
+    """``dir/name.pptx`` → first free ``dir/name (n).pptx``."""
+    target = directory / filename
+    if not target.exists():
+        return target
+    stem, suffix = target.stem, target.suffix
+    for n in range(2, 1000):
+        candidate = directory / f"{stem} ({n}){suffix}"
+        if not candidate.exists():
+            return candidate
+    raise HTTPException(500, "Could not find a free filename in the output folder")
+
+
+@app.get("/config/pptx-output")
+async def get_pptx_output_config():
+    """Return the folder generated PPTX files are written to.
+
+    ``is_default`` tells the frontend the value is the system Downloads folder
+    (a suggestion), not something the user explicitly saved.
+    """
+    current = get_pptx_output_dir()
+    default = default_pptx_output_dir()
+    return {
+        "ok": True,
+        "path": current,
+        "default_path": default,
+        "is_default": current == default,
+        "exists": Path(current).is_dir(),
+    }
+
+
+@app.post("/config/pptx-output")
+async def set_pptx_output_config(req: PptxOutputRequest):
+    """Persist the folder generated PPTX files are written to."""
+    raw = (req.path or "").strip()
+    if not raw:
+        raise HTTPException(400, "path is required")
+    folder = Path(raw).expanduser()
+    if folder.exists() and not folder.is_dir():
+        raise HTTPException(400, "path exists but is not a folder")
+    if not folder.exists():
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise HTTPException(400, f"Cannot create folder: {e}")
+    saved = set_pptx_output_dir(str(folder))
+    # The path itself is user data — log only that a change happened.
+    logger.info("PPTX output folder updated")
+    return {"ok": True, "path": saved}
+
+
+@app.post("/html2pptx/save")
+async def html2pptx_save(req: Html2PptxSaveRequest):
+    """Write a browser-generated PPTX to the configured output folder.
+
+    Body (JSON):
+        filename:    str  — base name; sanitised, ".pptx" enforced
+        data_base64: str  — pptx bytes, bare base64 or a data: URI
+        output_dir:  str | null — one-off folder override
+        overwrite:   bool — False (default) auto-suffixes "name (2).pptx"
+
+    Returns {"ok", "path", "filename", "size_kb"}.
+    """
+    payload = (req.data_base64 or "").strip()
+    if not payload:
+        raise HTTPException(400, "data_base64 is required")
+    if payload.startswith("data:"):
+        _, _, payload = payload.partition(",")
+    payload = "".join(payload.split())          # drop any embedded whitespace/newlines
+
+    # Reject before decoding: base64 inflates 4→3, so this bounds decoded size.
+    if len(payload) > (MAX_PPTX_BYTES // 3) * 4 + 8:
+        raise HTTPException(413, "PPTX payload too large")
+
+    try:
+        blob = base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(400, "data_base64 is not valid base64")
+    if not blob:
+        raise HTTPException(400, "Decoded PPTX is empty")
+    if len(blob) > MAX_PPTX_BYTES:
+        raise HTTPException(413, "PPTX payload too large")
+    if not blob.startswith(_ZIP_MAGIC):
+        # A pptx is an OOXML zip; anything else means the browser handed us junk.
+        raise HTTPException(400, "Payload is not a valid PPTX (bad ZIP header)")
+
+    folder = Path((req.output_dir or "").strip() or get_pptx_output_dir()).expanduser()
+    if folder.exists() and not folder.is_dir():
+        raise HTTPException(400, "Output path exists but is not a folder")
+    if not folder.exists():
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise HTTPException(400, f"Cannot create output folder: {e}")
+
+    filename = _safe_pptx_filename(req.filename)
+    target = folder / filename if req.overwrite else _unique_path(folder, filename)
+
+    try:
+        target.write_bytes(blob)
+    except OSError as e:
+        logger.exception("Failed to write PPTX")
+        raise HTTPException(500, f"Could not write file: {e}")
+
+    size_kb = round(len(blob) / 1024, 1)
+    # Do not log the folder path (user data) — only the file name and size.
+    logger.info(f"HTML→PPTX saved: {target.name} ({size_kb} KB)")
+    return {
+        "ok": True,
+        "path": str(target),
+        "filename": target.name,
+        "size_kb": size_kb,
+    }
 
 
 # ---------------------------------------------------------------------------

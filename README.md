@@ -117,9 +117,44 @@ python main.py reset    --project-id PROJ-001   # clear index + screenshots
 
 ---
 
+## Side Utility — HTML → PPTX (`/html2pptx`)
+
+A second page, reachable from the **HTML → PPTX** button in the header, turns
+AI-generated slide **markup** into a real `.pptx`. AI tools return HTML *code*,
+not files, so the page takes pasted source — no upload.
+
+```
+paste HTML code → [执行 / Convert] → <output folder>/<name>.pptx
+```
+
+**Where the conversion runs.** The vendored `html-to-pptx` library
+(`html-to-pptx/`) is not an HTML parser — it walks a *rendered* DOM and reads
+`getComputedStyle()` / `getBoundingClientRect()` / `offsetWidth`, values that
+only exist after a real CSS layout engine has run. So the pasted markup is
+rendered in an **off-screen, same-origin iframe** in the user's browser (the
+browser *is* the layout engine), converted there, and the resulting bytes are
+POSTed to the backend, which writes the file into the chosen folder. This adds
+**zero Python dependencies** — no Playwright, no headless Chromium.
+
+| Concern         | Behaviour                                                                 |
+| --------------- | ------------------------------------------------------------------------- |
+| Slide detection | `auto` tries `page` / `slide` / `h-ppt-page` / `ppt-page`; otherwise the document's top-level blocks are tagged as slides. Override with an exact class name. |
+| Output folder   | Defaults to the system **Downloads** folder; editable + Browse picker, persisted in `config_overrides.json` (`pptx_output_dir`). |
+| Naming          | Sanitised, `.pptx` enforced, auto-suffixed `name (2).pptx` instead of overwriting. |
+| Code fences     | Markdown ```` ```html ```` wrappers are stripped automatically.             |
+| CDN decks       | Tailwind / Chart.js CDNs work — fonts, images and runtime CSS are awaited before measuring. |
+| Safety          | Pasted scripts **do execute locally** during rendering (required for CDN decks). The server validates the ZIP magic, caps payloads at 80 MB, and strips any path component from the file name. |
+
+Endpoints: `GET /html2pptx`, `GET|POST /config/pptx-output`, `POST /html2pptx/save`.
+Frontend: `static/html2pptx.{html,js}`. Library: `html-to-pptx/` (see its README).
+
+---
+
 ## Directory Layout
 
 ```
+html-to-pptx/               vendored browser-side HTML→PPTX converter
+                            (dist/html-to-pptx.min.js is the only runtime file)
 <project_name>/              a project folder under the project root; holds the
                             raw dossiers to classify (the input — no upload)
 <project_name>/CLINS,

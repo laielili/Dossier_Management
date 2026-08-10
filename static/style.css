@@ -799,6 +799,11 @@ body {
   border-bottom: 1px solid var(--line-2, #e2e8f0);
 }
 .modal-head h3 { margin: 0; font-size: 16px; }
+.modal-body {
+  padding: 16px 18px 18px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
 
 /* Saved listen-folder history list (inside the folder picker) */
 .saved-paths-block {
@@ -903,12 +908,35 @@ body {
   border-top: 1px solid var(--line-2, #e2e8f0);
 }
 
+.modal-sub {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #1e293b);
+  margin: 18px 0 8px;
+}
+.modal-sub:first-child { margin-top: 0; }
+.modal-sep {
+  border: none;
+  border-top: 1px solid var(--line-2, #e2e8f0);
+  margin: 18px 0;
+}
+
 /* ============================================================
    Simplified home — one-click run + auto-watch components
    ============================================================ */
 
 /* --- Run workflow card --- */
-.run-card { border-left: 4px solid var(--run); }
+/* Run Pipeline card: recolor the amber accent to the brand ink-green so it
+   matches the ink-green band at the top of the page. Scoped to .run-card so
+   the Convert button on the HTML→PPTX page (also .btn-accent) is untouched. */
+.run-card { border-left: 4px solid var(--primary); }
+.run-card .btn-accent { background: var(--primary); }
+.run-card .btn-accent:hover:not(:disabled) { background: var(--primary-700); }
+
+/* Convert button on the HTML→PPTX page: same brand ink-green as the
+   Run Pipeline button so both primary actions read as one accent family. */
+.convert-card .btn-accent { background: var(--primary); }
+.convert-card .btn-accent:hover:not(:disabled) { background: var(--primary-700); }
 
 .btn-run-all {
   font-size: 15px;
@@ -1104,4 +1132,71 @@ body {
   border-radius: var(--r-sm);
   padding: 6px 10px;
   display: inline-block;
+}
+
+/* ===================== Page navigation (cross-page links) ===================== */
+.page-nav {
+  margin-top: 18px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* ===================== HTML → PPTX: code editor ===================== */
+.code-input {
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+  padding: 14px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-sunk);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  tab-size: 2;
+  outline: none;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast),
+              background var(--t-fast);
+}
+.code-input:focus {
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--primary-100);
+}
+.code-input::placeholder { color: var(--ink-3); }
+
+.code-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.code-toolbar-spacer { flex: 1; }
+.code-stat {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+
+/* Static ".pptx" tail on the file-name input */
+.suffix-tag {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-2);
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  flex: none;
+}
+
+/* Host for the off-screen render iframe. Deliberately given NO size, overflow
+   or display rules: the iframe inside is position:fixed and parked off-screen,
+   and it MUST keep a real layout box — the converter skips any slide whose
+   offsetWidth/offsetHeight is 0, so clipping or hiding it here would silently
+   produce an empty deck. */
+#render-stage {
+  pointer-events: none;
 }

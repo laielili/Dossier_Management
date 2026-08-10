@@ -16,12 +16,20 @@
     <p class="eyebrow">Document Preparation Pipeline</p>
     <h1>Performance Dossier Management</h1>
     <p class="subtitle">A route to AI synthesis</p>
+    <nav class="page-nav">
+      <a class="btn btn-sm btn-outline" href="/html2pptx"
+        title="Paste AI-generated HTML slide markup and convert it to a .pptx deck">
+        HTML &rarr; PPTX &nbsp;&rsaquo;
+      </a>
+    </nav>
   </header>
 
-  <!-- ============ 1. Listen Folder ============ -->
+  <!-- ============ Listen Folder ============ -->
   <section class="card" id="config-section">
     <div class="card-head">
-      <h2>1. Listen Folder</h2>
+      <h2>Listen Folder</h2>
+      <button class="btn btn-sm btn-outline" id="btn-config" type="button"
+        title="Open classification &amp; page-selection configuration">Config</button>
     </div>
     <p class="hint">Set the <strong>Listen Folder</strong> (base directory where your project folders live). New project folders dropped into it can be processed with one click — or automatically when Auto-Watch is on. The path is saved locally and reused next time.</p>
 
@@ -57,63 +65,9 @@
     </div>
   </section>
 
-  <!-- ============ 2. Configuration (collapsed editors) ============ -->
-  <section class="card">
-    <h2>2. Configuration</h2>
-    <p class="hint">Optional. Tune the classification anchors and page-selection queries. Defaults work for most dossiers.</p>
-
-    <!-- 2a. Classification anchors (classify/*.txt) -->
-    <div class="toggle-row" id="toggle-profiles">
-      <span class="toggle-arrow">&#9654;</span>
-      <span class="toggle-label">Classification Config</span>
-      <span class="toggle-hint">Click to edit classification anchors (classify/*.txt)</span>
-    </div>
-    <div class="queries-panel hidden" id="profiles-panel">
-      <p class="panel-hint">Classification frame: uses keywords from each document's first 1&ndash;2 pages to auto-sort it into CLINS / FE (Sensory) / CE.</p>
-      <div class="query-editor" data-type="CLINS">
-        <label>CLINS &mdash; Clinical</label>
-        <textarea id="profile-CLINS" rows="3"></textarea>
-      </div>
-      <div class="query-editor" data-type="FE">
-        <label>FE &mdash; Sensory</label>
-        <textarea id="profile-FE" rows="3"></textarea>
-      </div>
-      <div class="query-editor" data-type="CE">
-        <label>CE &mdash; Consumer Evaluation</label>
-        <textarea id="profile-CE" rows="3"></textarea>
-      </div>
-      <button class="btn btn-sm btn-outline" id="btn-save-profiles"
-        title="Write the edited classification anchors back to classify/*.txt">Save</button>
-    </div>
-
-    <!-- 2b. Page-selection queries (queries/*.txt) -->
-    <div class="toggle-row" id="toggle-queries">
-      <span class="toggle-arrow">&#9654;</span>
-      <span class="toggle-label">Page-Selection Config</span>
-      <span class="toggle-hint">Click to edit page-selection queries (queries/*.txt)</span>
-    </div>
-    <div class="queries-panel hidden" id="queries-panel">
-      <p class="panel-hint">Page-selection queries: at package time two parallel selectors run &mdash; keyword match picks on-topic summary pages, and layout structure (figures / lists / tables) picks information-dense pages &mdash; then both sets are merged for the downstream AI.</p>
-      <div class="query-editor" data-type="CLINS">
-        <label>CLINS &mdash; Clinical</label>
-        <textarea id="query-CLINS" rows="3"></textarea>
-      </div>
-      <div class="query-editor" data-type="FE">
-        <label>FE &mdash; Sensory</label>
-        <textarea id="query-FE" rows="3"></textarea>
-      </div>
-      <div class="query-editor" data-type="CE">
-        <label>CE &mdash; Consumer Evaluation</label>
-        <textarea id="query-CE" rows="3"></textarea>
-      </div>
-      <button class="btn btn-sm btn-outline" id="btn-save-queries"
-        title="Write the edited page-selection queries back to queries/*.txt">Save</button>
-    </div>
-  </section>
-
-  <!-- ============ 3. Run Pipeline (one-click workflow) ============ -->
+  <!-- ============ Run Pipeline (one-click workflow) ============ -->
   <section class="card run-card">
-    <h2>3. Run Pipeline</h2>
+    <h2>Run Pipeline</h2>
     <p class="hint">One click runs the whole pipeline for every project folder found in the Listen Folder: <strong>scan &rarr; classify &rarr; ingest &rarr; package</strong>. Finished PDFs are saved to <strong>&lt;Listen Folder&gt;/Dossier_condensed/</strong>.</p>
 
     <!-- 3a. Deletion Floor (page-deletion threshold) -->
@@ -190,7 +144,57 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=21"></script>
+<!-- ============ Configuration modal (full-screen) ============ -->
+<div id="config-modal" class="modal hidden">
+  <div class="modal-backdrop" id="config-modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <h3>Configuration</h3>
+      <button class="modal-close" id="config-modal-close" type="button" title="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- 2a. Classification anchors (classify/*.txt) -->
+      <h4 class="modal-sub">Classification Config</h4>
+      <p class="panel-hint">Classification frame: uses keywords from each document's first 1&ndash;2 pages to auto-sort it into CLINS / FE (Sensory) / CE.</p>
+      <div class="query-editor" data-type="CLINS">
+        <label>CLINS &mdash; Clinical</label>
+        <textarea id="profile-CLINS" rows="3"></textarea>
+      </div>
+      <div class="query-editor" data-type="FE">
+        <label>FE &mdash; Sensory</label>
+        <textarea id="profile-FE" rows="3"></textarea>
+      </div>
+      <div class="query-editor" data-type="CE">
+        <label>CE &mdash; Consumer Evaluation</label>
+        <textarea id="profile-CE" rows="3"></textarea>
+      </div>
+      <button class="btn btn-sm btn-outline" id="btn-save-profiles"
+        title="Write the edited classification anchors back to classify/*.txt">Save</button>
+
+      <hr class="modal-sep">
+
+      <!-- 2b. Page-selection queries (queries/*.txt) -->
+      <h4 class="modal-sub">Page-Selection Config</h4>
+      <p class="panel-hint">Page-selection queries: at package time two parallel selectors run &mdash; keyword match picks on-topic summary pages, and layout structure (figures / lists / tables) picks information-dense pages &mdash; then both sets are merged for the downstream AI.</p>
+      <div class="query-editor" data-type="CLINS">
+        <label>CLINS &mdash; Clinical</label>
+        <textarea id="query-CLINS" rows="3"></textarea>
+      </div>
+      <div class="query-editor" data-type="FE">
+        <label>FE &mdash; Sensory</label>
+        <textarea id="query-FE" rows="3"></textarea>
+      </div>
+      <div class="query-editor" data-type="CE">
+        <label>CE &mdash; Consumer Evaluation</label>
+        <textarea id="query-CE" rows="3"></textarea>
+      </div>
+      <button class="btn btn-sm btn-outline" id="btn-save-queries"
+        title="Write the edited page-selection queries back to queries/*.txt">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js?v=23"></script>
 
 </body>
 </html>

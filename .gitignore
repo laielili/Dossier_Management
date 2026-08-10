@@ -10,6 +10,14 @@ build/
 .venv/
 venv/
 
+# ---------- Vendored html-to-pptx ----------
+# The `dist/` rule above would swallow the vendored converter bundle, which is
+# the ONLY runtime artifact the HTML → PPTX page needs (it is loaded by the
+# browser from /html-to-pptx/dist/...). It must be committed.
+!html-to-pptx/dist/
+!html-to-pptx/dist/html-to-pptx.min.js
+html-to-pptx/node_modules/
+
 # ---------- Auto-generated runtime data (do not commit) ----------
 chroma_projects/
 screenshots/

@@ -262,18 +262,28 @@ $("#folder-modal-backdrop").addEventListener("click", () =>
 // Configuration editors (collapsed panels)
 // =================================================================
 
-function bindToggle(rowId, panelId) {
+function bindConfigModal(rowId, modalId, onOpen) {
   const row = document.getElementById(rowId);
-  row.addEventListener("click", () => {
-    const panel = document.getElementById(panelId);
-    const arrow = row.querySelector(".toggle-arrow");
-    const isHidden = panel.classList.contains("hidden");
-    panel.classList.toggle("hidden", !isHidden);
-    if (arrow) arrow.classList.toggle("expanded", isHidden);
-  });
+  const modal = document.getElementById(modalId);
+  const close = () => modal.classList.add("hidden");
+  const open = () => {
+    modal.classList.remove("hidden");
+    if (typeof onOpen === "function") onOpen();
+  };
+  row.addEventListener("click", open);
+  modal.querySelector(".modal-close").addEventListener("click", close);
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
 }
-bindToggle("toggle-profiles", "profiles-panel");
-bindToggle("toggle-queries", "queries-panel");
+bindConfigModal("btn-config", "config-modal", () => {
+  loadProfiles();
+  loadQueries();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const m = document.getElementById("config-modal");
+  if (m && !m.classList.contains("hidden")) m.classList.add("hidden");
+});
 
 // --- Classification anchors (classify/*.txt) ---
 function getProfilesFromUI() {
