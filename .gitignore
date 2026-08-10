@@ -26,10 +26,10 @@ logs/
 
 # ---------- Per-project dossier folders (new model) ----------
 # Each user project lives at the repo root as PROJECT_ROOT/<project_name>/
-# and is auto-classified into <project_name>/{CLINICAL,FE,CE}/.
+# and is auto-classified into <project_name>/{CLINS,FE,CE}/.
 # The classified report subfolders (and their PDFs/pptx/docx) are user
 # data and must NOT enter version control.
-**/CLINICAL/
+**/CLINS/
 **/FE/
 **/CE/
 
