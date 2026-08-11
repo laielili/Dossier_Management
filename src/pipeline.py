@@ -33,33 +33,50 @@ logger = get_logger("pipeline")
 
 
 # ---------------------------------------------------------------------------
-# Query-file helpers (read / write queries/*.txt)
+# Query-file helpers (read / write the unified queries/query.txt lexicon)
 # ---------------------------------------------------------------------------
 
-def load_queries_from_files() -> dict[str, str]:
-    """Read per-type queries from queries/{CLINS,FE,CE}.txt.
+QUERY_FILE = QUERIES_DIR / "query.txt"
 
-    Falls back to DEFAULT_QUERIES for any missing file.
+
+def load_query_file() -> str:
+    """Read the unified query lexicon from queries/query.txt.
+
+    Falls back to the concatenated DEFAULT_QUERIES text if the file is missing.
     """
-    queries: dict[str, str] = {}
-    for rt in REPORT_TYPES:
-        qf = QUERIES_DIR / f"{rt}.txt"
-        if qf.exists():
-            queries[rt] = qf.read_text(encoding="utf-8").strip()
-        else:
-            queries[rt] = DEFAULT_QUERIES.get(rt, "")
-            logger.info(f"No query file for {rt}, using built-in default")
-    return queries
+    if QUERY_FILE.exists():
+        return QUERY_FILE.read_text(encoding="utf-8").strip()
+    return "\n\n".join(DEFAULT_QUERIES[rt] for rt in REPORT_TYPES)
+
+
+def save_query_file(text: str) -> None:
+    """Write the unified query lexicon to queries/query.txt."""
+    QUERIES_DIR.mkdir(parents=True, exist_ok=True)
+    QUERY_FILE.write_text(text.strip() + "\n", encoding="utf-8")
+    logger.info(f"Saved unified query file: {QUERY_FILE}")
+
+
+def load_queries_from_files() -> dict[str, str]:
+    """Read the unified queries/query.txt lexicon and replicate it for every
+    report type (the retriever scores each type against the same lexicon)."""
+    text = load_query_file()
+    return {rt: text for rt in REPORT_TYPES}
 
 
 def save_queries_to_files(queries: dict[str, str]) -> None:
-    """Write per-type queries back to queries/{CLINS,FE,CE}.txt."""
-    QUERIES_DIR.mkdir(parents=True, exist_ok=True)
+    """Write the unified queries/query.txt lexicon.
+
+    The dict may carry per-type keys; they are expected to be identical (the
+    UI edits a single merged file), so the first non-empty value wins.
+    """
+    text = ""
     for rt in REPORT_TYPES:
-        text = queries.get(rt, DEFAULT_QUERIES.get(rt, ""))
-        qf = QUERIES_DIR / f"{rt}.txt"
-        qf.write_text(text.strip() + "\n", encoding="utf-8")
-        logger.info(f"Saved query file: {qf}")
+        if queries.get(rt):
+            text = queries[rt]
+            break
+    if not text:
+        text = next(iter(queries.values()), "")
+    save_query_file(text)
 
 
 # ---------------------------------------------------------------------------

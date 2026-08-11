@@ -15,8 +15,8 @@ Endpoints:
   POST /run              — One-click: ingest + package
   GET  /status           — Index stats
   GET  /download/{pid}  — Download the output PDF
-  GET  /queries          — Read per-type query texts from queries/*.txt
-  POST /queries/save     — Save per-type query texts to queries/*.txt
+  GET  /queries          — Read the unified query lexicon from queries/query.txt
+  POST /queries/save     — Save the unified query lexicon to queries/query.txt
   POST /reset            — Reset project (index + screenshots only)
   POST /clear-reset      — Safe reset: index + screenshots + output PDF only
   POST /run-all          — One-click: full chain for ALL project folders,
@@ -78,7 +78,7 @@ from .classifier import (
     load_profiles_from_files as load_classify_profiles,
     save_profiles_to_files as save_classify_profiles,
 )
-from .retriever import list_veto_terms
+from .retriever import list_veto_terms, reset_veto_terms
 from .converter import _is_junk_filename
 from .page_index import delete_index, index_exists
 from .orchestrator import (
@@ -684,9 +684,10 @@ async def save_classify_profiles_endpoint(req: ClassifyProfileSaveRequest):
 
 @app.get("/queries")
 async def get_queries():
-    """Read current per-type query texts from queries/*.txt files.
+    """Read the unified query lexicon from queries/query.txt.
 
-    Returns:
+    Returns the same text replicated for every report type so the frontend can
+    populate a single editable box and the retriever can score each type:
         {"CLINS": "...", "FE": "...", "CE": "..."}
     """
     try:
@@ -699,10 +700,11 @@ async def get_queries():
 
 @app.post("/queries/save")
 async def save_queries(req: QueriesSaveRequest):
-    """Save per-type query texts to queries/*.txt files.
+    """Save the unified query lexicon to queries/query.txt.
 
     Body (JSON):
-        queries: {"CLINS": "...", "FE": "...", "CE": "..."}
+        queries: {"CLINS": "...", "FE": "...", "CE": "..."}  (all identical —
+                  the UI edits one merged file and sends it for every type)
     """
     try:
         # Validate that all keys are known report types
@@ -713,6 +715,7 @@ async def save_queries(req: QueriesSaveRequest):
                     f"Invalid report_type '{rt}'. Must be one of {REPORT_TYPES}",
                 )
         save_queries_to_files(req.queries)
+        reset_veto_terms()   # freshly saved query.txt takes effect immediately
         return {"ok": True, "saved": list(req.queries.keys())}
     except HTTPException:
         raise

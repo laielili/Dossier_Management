@@ -343,29 +343,56 @@ $("#btn-save-profiles").addEventListener("click", async (e) => {
 
 // --- Noise-based page filtering (replaces the old Deletion Floor control) ---
 const noiseCats = $("#noise-cats");
-const vetoTerms = $("#veto-terms");
+const queryTxt = $("#query-txt");
 const dropDecorative = $("#drop-decorative");
 const noiseStatus = $("#noise-status");
 
 async function loadNoiseConfig() {
   try {
-    const res = await fetch("/config/params");
-    const data = await res.json();
-    if (!data.ok) return;
-    noiseCats.innerHTML = "";
-    (data.noise_categories || []).forEach(c => {
-      const cls = c.active ? "chip chip-on" : "chip chip-off";
-      noiseCats.insertAdjacentHTML("beforeend", `<span class="${cls}">${c.label}${c.active ? "" : " (off)"}</span>`);
-    });
-    vetoTerms.innerHTML = "";
-    (data.veto_terms || []).forEach(t => {
-      vetoTerms.insertAdjacentHTML("beforeend", `<span class="chip chip-veto">${t}</span>`);
-    });
-    dropDecorative.checked = !!data.drop_decorative_image;
+    const [paramsRes, qRes] = await Promise.all([
+      fetch("/config/params"),
+      fetch("/queries"),
+    ]);
+    const params = await paramsRes.json();
+    const qData = await qRes.json();
+    if (params.ok) {
+      noiseCats.innerHTML = "";
+      (params.noise_categories || []).forEach(c => {
+        const cls = c.active ? "chip chip-on" : "chip chip-off";
+        noiseCats.insertAdjacentHTML("beforeend", `<span class="${cls}">${c.label}${c.active ? "" : " (off)"}</span>`);
+      });
+      dropDecorative.checked = !!params.drop_decorative_image;
+    }
+    if (qData.ok && qData.queries) {
+      const txt = qData.queries.CLINS || qData.queries.FE || qData.queries.CE || "";
+      queryTxt.value = txt;
+    }
   } catch (err) {
-    // config params are optional — ignore network errors silently
+    // config params / queries are optional — ignore network errors silently
   }
 }
+
+$("#btn-save-query").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  setButtonLoading(btn, true);
+  try {
+    const text = queryTxt.value;
+    const res = await fetch("/queries/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queries: { CLINS: text, FE: text, CE: text } }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      log("Saved query lexicon to queries/query.txt", "success");
+    } else {
+      log("Failed to save queries: " + (data.detail || ""), "error");
+    }
+  } catch (err) {
+    log("Save queries error: " + err.message, "error");
+  }
+  setButtonLoading(btn, false);
+});
 
 dropDecorative.addEventListener("change", async () => {
   try {
@@ -378,7 +405,6 @@ dropDecorative.addEventListener("change", async () => {
     if (data.ok) {
       noiseStatus.textContent = `saved (decorative ${data.drop_decorative_image ? "on" : "off"})`;
       log(`Decorative-image dropping ${data.drop_decorative_image ? "ON" : "OFF"}.`, "success");
-      loadNoiseConfig();
     } else {
       noiseStatus.textContent = "save failed";
     }

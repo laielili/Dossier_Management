@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Performance Dossier Management — Document Pipeline</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="/static/style.css?v=20">
+<link rel="stylesheet" href="/static/style.css?v=21">
 </head>
 <body>
 
@@ -168,9 +168,9 @@
       </div>
 
       <!-- 2. Noise filtering (collapsible) -->
-      <div class="accordion open" id="acc-noise">
+      <div class="accordion" id="acc-noise">
         <button class="accordion-head" type="button" id="acc-head-noise"
-          aria-expanded="true" aria-controls="acc-body-noise">
+          aria-expanded="false" aria-controls="acc-body-noise">
           <span class="accordion-title">Noise Filtering</span>
           <span class="accordion-chevron">&#9662;</span>
         </button>
@@ -190,8 +190,13 @@
           </div>
 
           <div class="noise-section">
-            <div class="noise-section-title">Veto terms <span class="muted">(reused from queries/*.txt)</span></div>
-            <div id="veto-terms" class="chip-row"></div>
+            <div class="noise-section-title">Query lexicon <span class="muted">(queries/query.txt)</span></div>
+            <div class="query-editor">
+              <label for="query-txt">Title Anchors + Table Features &rarr; veto terms &nbsp;·&nbsp; Metric Keywords / Other &rarr; footer scoring</label>
+              <textarea id="query-txt" rows="10"></textarea>
+            </div>
+            <button class="btn btn-sm btn-outline" id="btn-save-query"
+              title="Write the edited query lexicon back to queries/query.txt">Save</button>
           </div>
 
           <div class="noise-section">
@@ -211,7 +216,7 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=27"></script>
+<script src="/static/app.js?v=28"></script>
 
 </body>
 </html>

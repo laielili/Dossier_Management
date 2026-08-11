@@ -224,18 +224,24 @@ _VETO_IMMUNE_NOISE = ("toc", "cover", "sectional")
 
 
 def list_veto_terms() -> list[str]:
-    """Return the veto-term list, reused from queries/*.txt (Title Anchors +
-    Table Features sections across all report types). Falls back to
-    VETO_SEED_TERMS if those files are missing."""
+    """Return the veto-term list, reused from the unified queries/query.txt
+    lexicon (Title Anchors + Table Features sections). Falls back to
+    VETO_SEED_TERMS if the file is missing."""
     terms: set[str] = set()
-    for rt in REPORT_TYPES:
-        qf = QUERIES_DIR / f"{rt}.txt"
-        if qf.exists():
-            dims = parse_lexicon(qf.read_text(encoding="utf-8"))
-            terms.update(dims.get("title_anchors", []))
-            terms.update(dims.get("table_features", []))
+    qf = QUERIES_DIR / "query.txt"
+    if qf.exists():
+        dims = parse_lexicon(qf.read_text(encoding="utf-8"))
+        terms.update(dims.get("title_anchors", []))
+        terms.update(dims.get("table_features", []))
     terms.update(VETO_SEED_TERMS)
     return sorted(terms)
+
+
+def reset_veto_terms() -> None:
+    """Drop the cached compiled veto regex so a freshly saved query.txt takes
+    effect on the next package run without a server restart."""
+    global _VETO_RE
+    _VETO_RE = None
 
 
 def get_veto_terms() -> re.Pattern:
