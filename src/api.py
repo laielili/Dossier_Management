@@ -51,17 +51,18 @@ from .config import (
     PROJECT_ROOT,
     REPORT_TYPES,
     SCREENSHOTS_DIR,
-    DELETE_SCORE_FLOOR,
     default_pptx_output_dir,
     delete_listen_folder,
     get_listen_folders,
     get_listen_folder,
-    get_delete_floor,
     get_pptx_output_dir,
-    set_delete_floor,
+    get_drop_decorative_image,
+    set_drop_decorative_image,
     set_pptx_output_dir,
     project_data_dir,
     set_listen_folder,
+    NOISE_CATEGORY_LABELS,
+    DROP_DECORATIVE_IMAGE,
 )
 # NOTE: DATA_DIR (the legacy global data/ folder) is intentionally no longer
 # imported here — the pipeline now reads/writes per-project folders
@@ -77,6 +78,7 @@ from .classifier import (
     load_profiles_from_files as load_classify_profiles,
     save_profiles_to_files as save_classify_profiles,
 )
+from .retriever import list_veto_terms
 from .converter import _is_junk_filename
 from .page_index import delete_index, index_exists
 from .orchestrator import (
@@ -139,7 +141,7 @@ class ScanRequest(BaseModel):
 
 
 class ParamsRequest(BaseModel):
-    delete_floor: Optional[float] = None  # new deletion floor; omit to read current
+    drop_decorative_image: Optional[bool] = None  # opt-in decorative-image dropping
 
 
 class ListenFolderRequest(BaseModel):
@@ -261,37 +263,44 @@ async def set_listen_folder_config(req: ListenFolderRequest):
 async def get_config_params():
     """Return the user-tunable pipeline parameters.
 
-    ``delete_floor`` is the effective deletion threshold (frontend override or
-    the hard-coded default). ``default_delete_floor`` is the constant default.
+    Noise-based deletion is always on. This endpoint exposes the active noise
+    categories, the veto terms (reused from queries/*.txt), and the opt-in
+    decorative-image drop flag so the frontend can render them.
     """
+    noise_categories = []
+    for k in NOISE_CATEGORY_LABELS:
+        active = get_drop_decorative_image() if k == "decorative" else True
+        noise_categories.append({
+            "key": k,
+            "label": NOISE_CATEGORY_LABELS.get(k, k),
+            "active": active,
+        })
     return {
         "ok": True,
-        "delete_floor": get_delete_floor(),
-        "default_delete_floor": float(DELETE_SCORE_FLOOR),
+        "noise_enabled": True,
+        "noise_categories": noise_categories,
+        "veto_terms": list_veto_terms(),
+        "drop_decorative_image": get_drop_decorative_image(),
+        "default_drop_decorative_image": bool(DROP_DECORATIVE_IMAGE),
     }
 
 
 @app.post("/config/params")
 async def set_config_params(req: ParamsRequest):
-    """Persist a user-tunable pipeline parameter (currently ``delete_floor``).
+    """Persist a user-tunable pipeline parameter.
 
     Body (JSON, all optional):
-        delete_floor: float  — pages scoring below this on BOTH tracks are
-                               deleted. Persisted so it applies to every run
-                               (including the one-click Run Full Pipeline).
+        drop_decorative_image: bool — opt-in dropping of near-full-page
+                                   decorative images (risky: can also catch
+                                   chart screenshots). Persisted so it applies
+                                   to every run, including Run Full Pipeline.
     """
-    if req.delete_floor is not None:
-        try:
-            v = float(req.delete_floor)
-        except (TypeError, ValueError):
-            raise HTTPException(400, "delete_floor must be a number")
-        if v < 0:
-            raise HTTPException(400, "delete_floor must be >= 0")
-        set_delete_floor(v)
+    if req.drop_decorative_image is not None:
+        set_drop_decorative_image(bool(req.drop_decorative_image))
     return {
         "ok": True,
-        "delete_floor": get_delete_floor(),
-        "default_delete_floor": float(DELETE_SCORE_FLOOR),
+        "drop_decorative_image": get_drop_decorative_image(),
+        "default_drop_decorative_image": bool(DROP_DECORATIVE_IMAGE),
     }
 
 

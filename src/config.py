@@ -142,10 +142,66 @@ SCREENSHOT_DPI = 300          # High resolution for crisp screenshots (~4x defau
 # The user's ~30% target corresponds to T~4, which also drops low-structure pages
 # (single figure/table). Default is conservative: removes only clearly-low-info
 # pages. Raise it if your real dossiers contain more boilerplate. Tune freely.
+# Legacy: this used to be the single global score floor that gated page
+# DELETION. Deletion is now NOISE-based (see src/retriever.classify_noise +
+# veto). The constant is kept only so older callers / the /config/params
+# fallback do not break; it no longer affects which pages are dropped.
 DELETE_SCORE_FLOOR = 3.0
 # Safety net: if deletion would leave a type with ZERO pages (whole dossier is
 # boilerplate), keep at least this many highest-value pages and warn.
 DELETE_MIN_KEEP = 3
+
+
+# --- Page-selection: NOISE-based deletion (replaces score-floor deletion) ---
+# We KEEP every page by default and delete ONLY pages we can PROVE are noise.
+# A "veto" layer force-keeps any page whose text contains a high-value term
+# (reused from queries/*.txt Title Anchors + Table Features), so genuinely
+# evidence-bearing pages are never dropped. See src/retriever.py.
+#
+# Noise categories (each is dropped when detected AND not vetoed):
+#   blank       almost no text and no figure/table/list
+#   toc         table-of-contents / agenda page (never veto-rescued)
+#   boilerplate page whose text is almost entirely lines repeated across many
+#               other pages of the same type (template / footer-only page)
+#   cover       title page (few text blocks, one large title, no table/list)
+#   sectional   section divider (1-2 blocks, very short, large font)
+#   closing     "thank you" / "work in progress" / "questions?" style page
+#   decorative  a near-full-page image with no caption/text (OFF by default;
+#               risky because it can also catch chart screenshots)
+# Thresholds are deliberately conservative — the design errs toward KEEPING.
+NOISE_CATEGORY_LABELS = {
+    "blank": "Blank / near-empty",
+    "toc": "Table of contents",
+    "boilerplate": "Boilerplate / template",
+    "cover": "Cover / title page",
+    "sectional": "Section divider",
+    "closing": "Closing (thank-you, etc.)",
+    "decorative": "Decorative image",
+}
+
+BLANK_MAX_CHARS = 30          # text shorter than this AND no figure/table/list => blank
+BLANK_MAX_FONT = 18.0          # near-blank requires SMALL font; a large-font short page
+                              # is a title/divider (cover/sectional), not blank
+COVER_MAX_BLOCKS = 3          # text-block count at/under this ...
+COVER_MIN_FONT = 18.0         # ... with a title this large ...
+COVER_MAX_CHARS = 200         # ... and this much text at most => cover
+COVER_MAX_FIGURES = 3         # covers may carry a logo; more figures => content
+SECTION_MAX_BLOCKS = 2
+SECTION_MIN_FONT = 18.0
+SECTION_MAX_CHARS = 60
+CLOSING_MAX_CHARS = 120
+BOILERPLATE_MIN_PAGES = 10    # a line seen on >= this many pages of a type is "common"
+BOILERPLATE_MIN_UNIQUE_CHARS = 40  # page with fewer unique chars => boilerplate
+VETO_MIN_UNIQUE_CHARS = 10    # pure-template boilerplate (fewer unique chars) NOT veto-rescued
+
+# Decorative-image dropping is opt-in (can catch real chart screenshots).
+DROP_DECORATIVE_IMAGE = False
+DECORATIVE_MAX_CHARS = 10
+DECORATIVE_IMG_RATIO = 0.85
+
+# Veto terms are reused from queries/*.txt (Title Anchors + Table Features).
+# This seed is only a fallback if those files are missing.
+VETO_SEED_TERMS = ["conclusion", "results", "p-value", "significance"]
 
 # --- User-tunable overrides (persisted to disk, editable from the frontend) --
 # The frontend exposes "Deletion Floor" so the user can retune page deletion
@@ -224,9 +280,29 @@ def get_delete_floor() -> float:
 
 
 def set_delete_floor(value: float) -> float:
-    """Persist the deletion floor override. Returns the stored value."""
+    """Persist the deletion floor override. Returns the stored value.
+
+    NOTE: delete_floor no longer gates deletion (deletion is noise-based). The
+    setter is kept only for backward compatibility with older frontends.
+    """
     v = float(value)
     set_config_overrides({"delete_floor": v})
+    return v
+
+
+def get_drop_decorative_image() -> bool:
+    """Effective decorative-image drop flag: user override if set, else the
+    hard-coded DROP_DECORATIVE_IMAGE default."""
+    ov = get_config_overrides().get("drop_decorative_image")
+    if ov is not None:
+        return bool(ov)
+    return bool(DROP_DECORATIVE_IMAGE)
+
+
+def set_drop_decorative_image(value: bool) -> bool:
+    """Persist the decorative-image drop override. Returns the stored value."""
+    v = bool(value)
+    set_config_overrides({"drop_decorative_image": v})
     return v
 
 # Optional MAX ceiling applied AFTER deletion. In delete mode this is OFF by

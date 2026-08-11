@@ -69,10 +69,45 @@ def detect_page_signals(page) -> dict:
         gaps = sum(1 for line in text.splitlines() if len(re.findall(r"  +", line)) >= 3)
         has_table = gaps >= 4
 
+    # --- Extra signals used by noise detection (all fitz-native, no deps) ---
+    # n_blocks: count of TEXT blocks (excludes image blocks). A content page
+    #   has many; a cover / section divider has only 1-3.
+    n_blocks = 0
+    max_font = 0.0
+    try:
+        blocks = page.get_text("blocks")
+        for b in blocks:
+            if len(b) > 6 and b[6] == 0:   # block_type 0 == text
+                n_blocks += 1
+        for b in page.get_text("dict").get("blocks", []):
+            for ln in b.get("lines", []):
+                for sp in ln.get("spans", []):
+                    if sp.get("size", 0.0) > max_font:
+                        max_font = sp["size"]
+    except Exception:
+        pass
+    # img_area_ratio: total raster-image area / page area (0..1). Used to spot
+    #   a near-full-page image with no caption (decorative-image noise).
+    img_area_ratio = 0.0
+    try:
+        rect = page.rect
+        page_area = float(rect.width * rect.height) or 1.0
+        total = 0.0
+        for info in page.get_image_info():
+            bbox = info.get("bbox")
+            if bbox:
+                total += float((bbox[2] - bbox[0]) * (bbox[3] - bbox[1]))
+        img_area_ratio = min(1.0, total / page_area)
+    except Exception:
+        pass
+
     return {
         "figures": figures,
         "bullets": has_bullets,
         "table": has_table,
+        "n_blocks": n_blocks,
+        "max_font": round(max_font, 1),
+        "img_area_ratio": round(img_area_ratio, 3),
     }
 
 

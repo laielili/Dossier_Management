@@ -4,9 +4,10 @@
    Layout:
      1. Listen Folder  — base directory config (input + Browse + Save),
                          with the Auto-Watch switch directly beneath it
-     2. Configuration  — collapsed editors: classification anchors
-                         (classify/*.txt) + page-selection queries
-                         (queries/*.txt)
+     2. Configuration  — collapsible accordions in the Config modal:
+                         classification anchors (classify/*.txt) + noise
+                         filtering (deleted noise types, veto terms,
+                         decorative-image toggle)
      3. Run Pipeline   — ONE button: scan → classify → ingest → package
                          → export for every project folder in the listen
                          folder; PDFs land in <listen>/Dossier_condensed/
@@ -19,10 +20,10 @@ const $ = (sel) => document.querySelector(sel);
 function log(message, level = "info") {
   const logArea = $("#log-area");
   const time = new Date().toLocaleTimeString();
-  const span = document.createElement("span");
-  span.className = `log-${level}`;
-  span.textContent = `[${time}] ${message}\n`;
-  logArea.appendChild(span);
+  const line = document.createElement("div");
+  line.className = `log-${level}`;
+  line.textContent = `[${time}] ${message}`;
+  logArea.appendChild(line);
   logArea.scrollTop = logArea.scrollHeight;
 }
 
@@ -276,7 +277,16 @@ function bindConfigModal(rowId, modalId, onOpen) {
 }
 bindConfigModal("btn-config", "config-modal", () => {
   loadProfiles();
-  loadQueries();
+  loadNoiseConfig();
+});
+
+// --- Config modal: collapsible accordion sections ---
+document.querySelectorAll(".accordion-head").forEach((head) => {
+  head.addEventListener("click", () => {
+    const acc = head.closest(".accordion");
+    const open = acc.classList.toggle("open");
+    head.setAttribute("aria-expanded", open ? "true" : "false");
+  });
 });
 
 document.addEventListener("keydown", (e) => {
@@ -331,91 +341,49 @@ $("#btn-save-profiles").addEventListener("click", async (e) => {
   setButtonLoading(btn, false);
 });
 
-// --- Page-selection queries (queries/*.txt) ---
-function getQueriesFromUI() {
-  return {
-    CLINS: $("#query-CLINS").value.trim(),
-    FE: $("#query-FE").value.trim(),
-    CE: $("#query-CE").value.trim(),
-  };
-}
+// --- Noise-based page filtering (replaces the old Deletion Floor control) ---
+const noiseCats = $("#noise-cats");
+const vetoTerms = $("#veto-terms");
+const dropDecorative = $("#drop-decorative");
+const noiseStatus = $("#noise-status");
 
-async function loadQueries() {
-  try {
-    const res = await fetch("/queries");
-    const data = await res.json();
-    if (data.ok && data.queries) {
-      for (const [type, text] of Object.entries(data.queries)) {
-        const el = document.querySelector(`#query-${type}`);
-        if (el) el.value = text;
-      }
-      log("Loaded page-selection queries from queries/*.txt", "info");
-    }
-  } catch (err) {
-    log("Failed to load queries: " + err.message, "warn");
-  }
-}
-
-$("#btn-save-queries").addEventListener("click", async (e) => {
-  const btn = e.currentTarget;
-  setButtonLoading(btn, true);
-  try {
-    const res = await fetch("/queries/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ queries: getQueriesFromUI() }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      log(`Saved queries to disk: ${data.saved.join(", ")}`, "success");
-    } else {
-      log("Failed to save queries: " + (data.detail || ""), "error");
-    }
-  } catch (err) {
-    log("Save queries error: " + err.message, "error");
-  }
-  setButtonLoading(btn, false);
-});
-
-// --- Deletion Floor (page-deletion threshold, persisted on the backend) ---
-const floorInput = $("#deletion-floor");
-const floorStatus = $("#floor-status");
-
-async function loadDeleteFloor() {
+async function loadNoiseConfig() {
   try {
     const res = await fetch("/config/params");
     const data = await res.json();
-    if (data.ok && data.delete_floor != null) {
-      floorInput.value = data.delete_floor;
-      floorStatus.textContent = `(default ${data.default_delete_floor})`;
-    }
+    if (!data.ok) return;
+    noiseCats.innerHTML = "";
+    (data.noise_categories || []).forEach(c => {
+      const cls = c.active ? "chip chip-on" : "chip chip-off";
+      noiseCats.insertAdjacentHTML("beforeend", `<span class="${cls}">${c.label}${c.active ? "" : " (off)"}</span>`);
+    });
+    vetoTerms.innerHTML = "";
+    (data.veto_terms || []).forEach(t => {
+      vetoTerms.insertAdjacentHTML("beforeend", `<span class="chip chip-veto">${t}</span>`);
+    });
+    dropDecorative.checked = !!data.drop_decorative_image;
   } catch (err) {
     // config params are optional — ignore network errors silently
   }
 }
 
-$("#btn-save-floor").addEventListener("click", async () => {
-  const raw = floorInput.value.trim();
-  const v = parseFloat(raw);
-  if (raw === "" || isNaN(v) || v < 0) {
-    log("Deletion Floor must be a number ≥ 0.", "warn");
-    return;
-  }
+dropDecorative.addEventListener("change", async () => {
   try {
     const res = await fetch("/config/params", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ delete_floor: v }),
+      body: JSON.stringify({ drop_decorative_image: dropDecorative.checked }),
     });
     const data = await res.json();
     if (data.ok) {
-      floorStatus.textContent = ` saved (${data.delete_floor})`;
-      log(`Deletion Floor set to ${data.delete_floor}.`, "success");
+      noiseStatus.textContent = `saved (decorative ${data.drop_decorative_image ? "on" : "off"})`;
+      log(`Decorative-image dropping ${data.drop_decorative_image ? "ON" : "OFF"}.`, "success");
+      loadNoiseConfig();
     } else {
-      log("Failed to save Deletion Floor: " + (data.detail || ""), "error");
+      noiseStatus.textContent = "save failed";
     }
   } catch (err) {
-    log("Save Deletion Floor error: " + err.message, "error");
+    noiseStatus.textContent = "save error: " + err.message;
   }
 });
 
@@ -631,8 +599,7 @@ watchToggle.addEventListener("change", async () => {
 
 loadListenFolder();
 loadProfiles();
-loadQueries();
-loadDeleteFloor();
+loadNoiseConfig();
 loadWatchState();
 pollActivity();
 setActivityPolling(false);

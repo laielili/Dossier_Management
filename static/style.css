@@ -36,6 +36,7 @@
 
   /* --- Success --- */
   --success: #3E8E5A;
+  --success-100: #E4F0EA;
 
   /* --- Type color codes (functional, per category) --- */
   --type-clinical: #3F6FA3;  --type-clinical-100: #E9EFF6;
@@ -729,38 +730,97 @@ body {
   min-width: 200px;
 }
 
-/* ===================== Deletion Floor param (Step 3) ===================== */
-.param-row {
+/* ===================== Noise Filtering panel (inside config accordion) ===================== */
+.noise-filter-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.noise-filter-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.badge-on {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--success);
+  background: var(--success-100);
+  border: 1px solid var(--success);
+  border-radius: 999px;
+  padding: 2px 8px;
+  text-transform: uppercase;
+}
+.noise-filter-desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.noise-filter-desc .muted { color: var(--ink-3); }
+
+.noise-section { margin-bottom: 14px; }
+.noise-section:last-child { margin-bottom: 0; }
+.noise-section-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+.noise-section-title .muted {
+  text-transform: none;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.chip-on { color: var(--primary-700); border-color: var(--primary); background: var(--primary-100); }
+.chip-off { color: var(--ink-3); border-style: dashed; background: var(--surface); }
+.chip-veto { color: var(--run-700); border-color: var(--run); background: var(--run-100); font-weight: 600; }
+
+.switch-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
-  margin: 14px 0 4px;
-}
-.param-row > label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink);
-  min-width: 120px;
-}
-.param-row #deletion-floor {
-  width: 96px;
-  padding: 8px 10px;
-  border: 1px solid var(--line-2);
+  padding: 12px 14px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
   border-radius: var(--r-sm);
-  font-size: 14px;
-  font-family: inherit;
-  background: var(--surface);
-  color: var(--ink);
-  outline: none;
+  cursor: pointer;
 }
-.param-row #deletion-floor:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-100);
+.switch-row .switch { flex: none; }
+.switch-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  flex: 1 1 auto;
+  line-height: 1.4;
 }
 .param-status {
   font-size: 12px;
   color: var(--success);
+  flex: none;
+  margin-left: auto;
 }
 .param-hint { margin-bottom: 16px; }
 
@@ -920,6 +980,53 @@ body {
   border-top: 1px solid var(--line-2, #e2e8f0);
   margin: 18px 0;
 }
+
+/* ===================== Config modal — collapsible accordions ===================== */
+.accordion {
+  border: 1px solid var(--line-2, #e2e8f0);
+  border-radius: var(--r-sm, 8px);
+  margin-bottom: 14px;
+  overflow: hidden;
+  background: var(--surface, #fff);
+}
+.accordion:last-child { margin-bottom: 0; }
+
+.accordion-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 16px;
+  background: var(--surface-sunk, #f8fafc);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ink, #1e293b);
+  text-align: left;
+  transition: background var(--t-fast);
+}
+.accordion-head:hover { background: var(--surface-sunk-2, #eef2f6); }
+.accordion-title { display: flex; align-items: center; gap: 10px; }
+
+.accordion-chevron {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink-3, #64748b);
+  flex: none;
+  transition: transform var(--t);
+}
+/* Closed sections point the chevron to the right; open points down. */
+.accordion:not(.open) .accordion-chevron { transform: rotate(-90deg); }
+
+.accordion-body {
+  display: none;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--line, #e2e8f0);
+}
+.accordion.open .accordion-body { display: block; }
 
 /* ============================================================
    Simplified home — one-click run + auto-watch components

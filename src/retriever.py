@@ -1,25 +1,23 @@
 """
 Retriever — discover relevant pages for a project at package time.
 
-Summary pages are found with LexicalRetriever using TWO INDEPENDENT, PARALLEL
-selectors (page-selection stage, distinct from document classification which
-uses classify/*.txt). Neither selector depends on the other's output:
+Page selection uses a NOISE-BASED deletion policy (distinct from document
+classification which uses classify/*.txt). Guiding principle: KEEP every page by
+default and delete ONLY pages we can prove are noise — this avoids the
+data-loss problem of score-threshold selection, where a pure-text conclusion
+page could be dropped just because its keyword score was low.
 
-  A) Keyword selector   — score every page of a type by lexical TF-IDF against
-     queries/{CLINS,FE,CE}.txt (the "summary" signal).
-  B) Structure selector — score every page of a type by structural richness
-     (figures + table + list) (the "information-dense" signal).
-
-Selection uses DELETE mode: every page is KEPT by default, and a page is
-deleted only when BOTH track scores fall below the single global floor
-config.DELETE_SCORE_FLOOR (union semantics — a page with a relevant table but
-off-topic text, or vice-versa, is never falsely removed). TOC / cover pages are
-zeroed on both tracks and therefore always deleted. An optional MAX ceiling
-(`top_n` > 0) can still truncate a type after deletion as a safety net.
-
-The two shortlists are produced side by side and then MERGED (union,
-deduplicated) at the very end. A page may be picked by A, by B, or by both;
-the merge records which selector(s) chose it.
+Deletion is driven by ``classify_noise`` (blank / toc / boilerplate / cover /
+sectional / closing / decorative) plus a cross-page boilerplate pass. A veto
+layer force-keeps any noise page whose text contains a high-value term reused
+from queries/*.txt (Title Anchors + Table Features), so evidence-bearing pages
+are never lost. The veto does NOT apply to toc / cover / sectional pages
+(veto-immune) — those are pure navigation/decoration and the package footer
+already carries the report title + type. The TF-IDF score is still computed per
+page but ONLY to populate the
+PDF footer "Key terms" annotation and to order survivors — it no longer gates
+deletion. An optional MAX ceiling (``top_n`` > 0) can still truncate a type after
+deletion as a safety net.
 
 Zero extra dependencies, deterministic, explainable.
 
@@ -42,9 +40,7 @@ from collections import Counter
 from .config import (
     REPORT_TYPES,
     TOP_N_PER_TYPE,
-    DELETE_SCORE_FLOOR,
     DELETE_MIN_KEEP,
-    get_delete_floor,
     LEXICON_DIMENSIONS,
     DIM_WEIGHTS,
     TF_SUBLINEAR,
@@ -52,6 +48,24 @@ from .config import (
     TITLE_ANCHOR_BOOST,
     TABLE_FEATURE_SYNERGY,
     TOC_HEADERS,
+    QUERIES_DIR,
+    BLANK_MAX_CHARS,
+    BLANK_MAX_FONT,
+    COVER_MAX_BLOCKS,
+    COVER_MIN_FONT,
+    COVER_MAX_CHARS,
+    COVER_MAX_FIGURES,
+    SECTION_MAX_BLOCKS,
+    SECTION_MIN_FONT,
+    SECTION_MAX_CHARS,
+    CLOSING_MAX_CHARS,
+    BOILERPLATE_MIN_PAGES,
+    BOILERPLATE_MIN_UNIQUE_CHARS,
+    VETO_MIN_UNIQUE_CHARS,
+    DECORATIVE_MAX_CHARS,
+    DECORATIVE_IMG_RATIO,
+    VETO_SEED_TERMS,
+    get_drop_decorative_image,
 )
 from .logger import get_logger
 from .page_index import load_index, index_count, delete_index
@@ -188,6 +202,125 @@ def _structural_score(page: dict) -> float:
     if sig.get("bullets"):
         score += 1.0
     return score
+
+
+# ---------------------------------------------------------------------------
+# Noise classification + veto (page DELETION is noise-based, not score-based)
+# ---------------------------------------------------------------------------
+
+# Closing-page marker phrases (case-insensitive word boundaries).
+_CLOSING_RE = re.compile(
+    r"\b(thank you|thanks|work in progress|questions?|contact us|"
+    r"appendix|end of (report|section|document))\b",
+    re.IGNORECASE,
+)
+
+_VETO_RE = None  # compiled lazily by get_veto_terms()
+
+# Noise types that are NEVER rescued by the veto layer — they are structural
+# navigation / decoration, not content, so even a high-value term on them is
+# not worth keeping (the footer already carries the report title + type).
+_VETO_IMMUNE_NOISE = ("toc", "cover", "sectional")
+
+
+def list_veto_terms() -> list[str]:
+    """Return the veto-term list, reused from queries/*.txt (Title Anchors +
+    Table Features sections across all report types). Falls back to
+    VETO_SEED_TERMS if those files are missing."""
+    terms: set[str] = set()
+    for rt in REPORT_TYPES:
+        qf = QUERIES_DIR / f"{rt}.txt"
+        if qf.exists():
+            dims = parse_lexicon(qf.read_text(encoding="utf-8"))
+            terms.update(dims.get("title_anchors", []))
+            terms.update(dims.get("table_features", []))
+    terms.update(VETO_SEED_TERMS)
+    return sorted(terms)
+
+
+def get_veto_terms() -> re.Pattern:
+    """Compiled, cached regex of the veto terms (word-boundary, case-insensitive,
+    multi-word phrases supported). A page whose text matches is force-kept."""
+    global _VETO_RE
+    if _VETO_RE is not None:
+        return _VETO_RE
+    escaped = [re.escape(t.strip()) for t in list_veto_terms() if t.strip()]
+    escaped.sort(key=len, reverse=True)  # longer phrases win over single words
+    _VETO_RE = re.compile(r"(?i)\b(" + "|".join(escaped) + r")\b")
+    return _VETO_RE
+
+
+def _content_lines(page: dict) -> list[str]:
+    """Non-trivial text lines of a page (used for cross-page boilerplate
+    detection). Drops very short fragments that are usually footers/numbers."""
+    text = page.get("text", "") or ""
+    return [ln.strip() for ln in text.splitlines() if len(ln.strip()) >= 4]
+
+
+def classify_noise(page: dict) -> str | None:
+    """Return a noise category if the page is provably noise, else None.
+
+    Conservative by design: only returns a category on strong structural
+    evidence, so genuine content pages (including pure-text conclusions) are
+    never flagged. The caller applies the veto layer on top, but toc / cover /
+    sectional pages are veto-immune (deleted regardless of any high-value
+    term), since the package footer already carries the report title + type.
+    """
+    sig = page.get("signals") or {}
+    text = page.get("text", "") or ""
+    n_chars = len(text.strip())
+    n_blocks = sig.get("n_blocks", 0) or 0
+    max_font = sig.get("max_font", 0.0) or 0.0
+    img_ratio = sig.get("img_area_ratio", 0.0) or 0.0
+    figures = sig.get("figures", 0) or 0
+    has_table = bool(sig.get("table"))
+    has_bullets = bool(sig.get("bullets"))
+
+    if _is_toc_page(page):
+        return "toc"
+    # Closing / thank-you pages (linguistic marker). Checked before the generic
+    # blank so a short "Thank you" page is labelled correctly (not "blank").
+    if n_chars < CLOSING_MAX_CHARS and _CLOSING_RE.search(text):
+        return "closing"
+    # Structural (navigation) pages: low content, large title font, no table/list.
+    # Checked before blank so a large-font short title is a cover/sectional, not
+    # a near-blank page.
+    if not has_table and not has_bullets and figures < COVER_MAX_FIGURES:
+        # sectional first (most specific: very short, <=2 blocks)
+        if (n_blocks <= SECTION_MAX_BLOCKS and max_font >= SECTION_MIN_FONT
+                and n_chars < SECTION_MAX_CHARS):
+            return "sectional"
+        if (n_blocks <= COVER_MAX_BLOCKS and max_font >= COVER_MIN_FONT
+                and n_chars < COVER_MAX_CHARS):
+            return "cover"
+    # Generic near-blank: little text, no figure/table/list, AND small font.
+    # (A short page with a large title font is a divider, handled above.)
+    if (n_chars < BLANK_MAX_CHARS and figures == 0 and not has_table
+            and not has_bullets and max_font < BLANK_MAX_FONT):
+        return "blank"
+    if (get_drop_decorative_image() and figures >= 1 and n_chars < DECORATIVE_MAX_CHARS
+            and not has_table and not has_bullets and img_ratio >= DECORATIVE_IMG_RATIO):
+        return "decorative"
+    return None
+
+
+def _detect_boilerplate(candidates: list[dict]) -> None:
+    """Cross-page pass: flag pages whose text is almost entirely lines repeated
+    across many other pages of the same type (template / footer-only pages).
+    Sets ``_noise = "boilerplate"`` and ``_boiler_unique`` (unique-char count) on
+    matching pages. Skips pages already flagged as another noise type."""
+    line_counter: Counter = Counter()
+    for p in candidates:
+        for line in _content_lines(p):
+            line_counter[line] += 1
+    for p in candidates:
+        if p.get("_noise"):
+            continue
+        uniq = [ln for ln in _content_lines(p) if line_counter[ln] < BOILERPLATE_MIN_PAGES]
+        uniq_text = " ".join(uniq).strip()
+        if len(uniq_text) < BOILERPLATE_MIN_UNIQUE_CHARS:
+            p["_noise"] = "boilerplate"
+            p["_boiler_unique"] = len(uniq_text)
 
 
 # ---------------------------------------------------------------------------
@@ -362,43 +495,34 @@ class LexicalRetriever(Retriever):
         top_n: int | None = None,
         delete_floor: float | None = None,
     ) -> list[dict]:
-        """Select pages for the synthesis PDF using TWO PARALLEL score tracks
-        and a DELETE policy (keep-all, drop-low-value).
+        """Select pages for the synthesis PDF using a NOISE-BASED deletion
+        policy (keep-all, drop provably-noise pages).
 
-        For each report type, BOTH scores are computed for every page up front
-        (neither track gates the other):
+        Every page is KEPT by default. A page is deleted only when it is
+        classified as noise AND not rescued by the veto layer::
 
-          A) Keyword track   — TF-IDF lexical score against queries/{type}.txt
-                               (the "summary" signal).
-          B) Structure track — structural richness (figures + table + list)
-                               (the "information-dense" signal).
+            keep  <=>  (noise is None)  OR  (veto AND noise not in {toc, cover, sectional, boilerplate[pure]})
 
-        DELETE mode: a page is KEPT by default and deleted ONLY when BOTH track
-        scores fall below the single global ``floor``::
+        Deletion is driven by ``classify_noise`` (blank / toc / boilerplate /
+        cover / sectional / closing / decorative) — NOT by a score threshold.
+        A cross-page boilerplate pass flags template/footer-only pages. The veto
+        layer force-keeps any page whose text contains a high-value term reused
+        from queries/*.txt (Title Anchors + Table Features), so genuinely
+        evidence-bearing pages (e.g. a pure-text conclusion) are never dropped.
 
-            deleted  <=>  (_kw_score < floor) AND (_struct_score < floor)
+        TF-IDF scoring is still computed per page but ONLY to populate the
+        footer "Key terms" annotation and to order survivors by informativeness
+        — it no longer gates deletion.
 
-        ``floor`` is the effective deletion threshold. It is taken from the
-        ``delete_floor`` argument when provided, otherwise from the persisted
-        frontend override (config.get_delete_floor()), which itself falls back
-        to the hard-coded ``config.DELETE_SCORE_FLOOR``. This preserves the
-        union semantics of the two tracks — a page with a relevant table but
-        off-topic text (or vice-versa) is never falsely removed, so genuinely
-        informative pages are retained. TOC / cover pages are zeroed on both
-        tracks and are therefore always deleted.
-
-        An optional MAX ceiling is applied AFTER deletion when ``top_n`` is a
-        positive integer (safety net only; ``None`` or ``-1`` means no ceiling,
-        so we never re-cap by rank). Each survivor is tagged with which track(s)
-        kept it (``selected_by``) and ordered: chosen-by-both first, then by
-        combined relevance.
+        An optional MAX ceiling (``top_n`` > 0) is applied AFTER deletion as a
+        safety net; ``None`` / ``-1`` means no ceiling.
         """
         pages = load_index(self.project_id)
         if not pages:
             return []
 
-        # Effective deletion floor: explicit arg > frontend override > constant.
-        floor = delete_floor if delete_floor is not None else get_delete_floor()
+        # delete_floor is accepted for backward compatibility but no longer
+        # gates deletion — deletion is now noise-based (see classify_noise).
 
         if top_n is None:
             cap = None            # delete mode: floor-driven, no rank cap by default
@@ -427,20 +551,11 @@ class LexicalRetriever(Retriever):
                 p["_top_tokens"] = set(toks[:top_k])
                 p["_top_text"] = " ".join(toks[:top_k])
 
-            # Compute BOTH scores for every page up front (parallel, no gating).
+            # TF-IDF scoring: kept ONLY for the footer "Key terms" annotation and
+            # for ordering survivors. It does NOT drive deletion anymore.
             lexicon = parse_lexicon(q) if q else {}
             idf = compute_idf(candidates, lexicon) if lexicon else {}
             for p in candidates:
-                # A Table-of-Contents / cover page is navigation, not content:
-                # exclude it from BOTH selectors. Zeroing both scores drops it
-                # from the keyword shortlist (it often lists every section
-                # heading = high-weight Title Anchors) and from the structure
-                # shortlist (its long bullet list would look "info-dense").
-                if _is_toc_page(p):
-                    p["_kw_score"] = 0.0
-                    p["matched_terms"] = []
-                    p["_struct_score"] = 0.0
-                    continue
                 if lexicon:
                     s, matched = _tfidf_score(p, lexicon, idf)
                 else:
@@ -449,20 +564,39 @@ class LexicalRetriever(Retriever):
                 p["matched_terms"] = matched
                 p["_struct_score"] = _structural_score(p)
 
-            # ---- DELETE mode: keep everything, drop only low-value pages ----
-            # A page survives if EITHER track meets the global floor (union
-            # semantics), so it is deleted only when BOTH tracks are below it.
-            # TOC / cover pages already have both scores zeroed -> auto-deleted.
+            # ---- NOISE-BASED deletion (keep-all, drop provable noise) ----
+            veto_re = get_veto_terms()
+            for p in candidates:
+                p["_noise"] = classify_noise(p)
+            # Cross-page boilerplate pass (needs all candidate pages).
+            _detect_boilerplate(candidates)
+            # Veto + final keep decision.
+            for p in candidates:
+                noise = p.get("_noise")
+                if noise is None:
+                    keep = True
+                else:
+                    veto = bool(veto_re.search(p.get("text", "") or ""))
+                    p["_veto"] = veto
+                    pure_template = (
+                        noise == "boilerplate"
+                        and p.get("_boiler_unique", 999) < VETO_MIN_UNIQUE_CHARS
+                    )
+                    if noise in _VETO_IMMUNE_NOISE or pure_template:
+                        keep = False          # navigation/decoration/pure-template: never rescued
+                    else:
+                        keep = veto           # any other noise kept ONLY if vetoed
+                p["_keep"] = keep
+
             survivor_keys = {
                 (p["source_path"], p["page_index"])
-                for p in candidates
-                if p["_kw_score"] >= floor
-                or p["_struct_score"] >= floor
+                for p in candidates if p.get("_keep")
             }
             if not survivor_keys:
-                # Safety net: whole type is boilerplate -> keep top-N by value + warn.
+                # Safety net: whole type classified as noise -> keep top-N by
+                # informativeness and warn.
                 logger.warning(
-                    f"[{rt}] deletion left 0 pages (entire type is boilerplate); "
+                    f"[{rt}] noise deletion left 0 pages (entire type is noise); "
                     f"keeping top {DELETE_MIN_KEEP} by value as a safeguard."
                 )
                 survivors = sorted(
@@ -482,39 +616,29 @@ class LexicalRetriever(Retriever):
                 if (p["source_path"], p["page_index"]) not in survivor_keys
             ]
 
-            # Tag which track(s) kept each survivor.
+            # Tag survivors: veto-kept vs normal content.
             for p in survivors:
-                sel = []
-                if p["_kw_score"] >= floor:
-                    sel.append("keyword")
-                if p["_struct_score"] >= floor:
-                    sel.append("structure")
-                p["selected_by"] = sel
+                p["selected_by"] = ["veto"] if p.get("_veto") else ["content"]
 
-            # Order: chosen-by-both first, then combined relevance.
+            # Order survivors by informativeness (most useful first).
             ordered = sorted(
                 survivors,
-                key=lambda p: (
-                    -len(p["selected_by"]),
-                    -p["_kw_score"],
-                    -p["_struct_score"],
-                ),
+                key=lambda p: (-p["_kw_score"], -p["_struct_score"]),
             )
 
-            # Optional MAX ceiling (only when an explicit top_n > 0 was given;
-            # None / -1 -> no ceiling, so we never re-cap by rank).
+            # Optional MAX ceiling (only when an explicit top_n > 0 was given).
             if cap is not None:
                 ordered = ordered[:cap]
 
-            both = sum(1 for p in ordered if len(p["selected_by"]) == 2)
-            kw_n = sum(1 for p in ordered if "keyword" in p["selected_by"])
-            st_n = sum(1 for p in ordered if "structure" in p["selected_by"])
+            noise_counts = Counter(
+                p["_noise"] for p in deleted if p.get("_noise")
+            )
+            veto_kept = sum(1 for p in survivors if p.get("_veto"))
             cap_label = "no ceiling" if cap is None else cap
             logger.info(
-                f"[{rt}] kept {len(ordered)} pages "
-                f"(keyword={kw_n}, structure={st_n}, both={both}, "
-                f"deleted={len(deleted)}) from {len(candidates)} candidates "
-                f"(floor={floor}, ceiling={cap_label})"
+                f"[{rt}] kept {len(ordered)} / {len(candidates)} "
+                f"(veto-kept={veto_kept}, deleted_by_noise={dict(noise_counts)}, "
+                f"ceiling={cap_label})"
             )
             results.extend(_to_items(ordered))
 
