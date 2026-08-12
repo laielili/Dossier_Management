@@ -282,15 +282,17 @@ python main.py reset    --project-id PROJ-001   # clear index + screenshots
 | `POST`       | `/ingest` `/package` `/run`| Per-project pipeline steps                                  |
 | `GET`        | `/status`                  | Index stats                                                 |
 | `GET`        | `/download/{project_id}`   | Download the synthesis PDF                                  |
-| `POST`       | `/reset`                   | Clear index + screenshots                                   |
-| `POST`       | `/clear-reset`             | Safe reset: index + screenshots + output PDF **only**       |
+| `POST`       | `/reset`                   | Clear index + screenshots (derived state only)              |
+| `POST`       | `/clear`                   | Full wipe: project folders + Dossier_condensed + derived state (index/screenshots/output PDF) |
 | `GET/POST`   | `/config/pptx-output`      | Read / save the PPTX output folder                          |
 | `POST`       | `/html2pptx/save`          | Persist a browser-generated PPTX                            |
 
-> **Reset is deliberately non-destructive.** `/clear-reset` and
-> `pipeline.reset()` only remove *derived* state (index, screenshots, generated
-> PDF). Dossier files inside a project folder are the user's source of truth —
-> they live in a synced directory and are never deleted.
+> **`/reset` is deliberately non-destructive** — it only removes *derived* state
+> (index, screenshots). The `/clear` button is the opposite: it permanently
+> deletes past runs, including the dossier source folders, `Dossier_condensed/`
+> contents, and all derived state (index + screenshots + output PDFs). It
+> requires an explicit confirm in the UI. The former `/clear-reset` endpoint was
+> removed — its scope is now fully covered by `/clear`.
 
 ---
 

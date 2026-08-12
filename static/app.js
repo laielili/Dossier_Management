@@ -6,8 +6,7 @@
                          with the Auto-Watch switch directly beneath it
      2. Configuration  — collapsible accordions in the Config modal:
                          classification anchors (classify/*.txt) + noise
-                         filtering (deleted noise types, veto terms,
-                         decorative-image toggle)
+                         filtering (deleted noise types, veto terms)
      3. Run Pipeline   — ONE button: scan → classify → ingest → package
                          → export for every project folder in the listen
                          folder; PDFs land in <listen>/Dossier_condensed/
@@ -341,11 +340,9 @@ $("#btn-save-profiles").addEventListener("click", async (e) => {
   setButtonLoading(btn, false);
 });
 
-// --- Noise-based page filtering (replaces the old Deletion Floor control) ---
+// --- Noise-based page filtering ---
 const noiseCats = $("#noise-cats");
 const queryTxt = $("#query-txt");
-const dropDecorative = $("#drop-decorative");
-const noiseStatus = $("#noise-status");
 
 async function loadNoiseConfig() {
   try {
@@ -361,7 +358,6 @@ async function loadNoiseConfig() {
         const cls = c.active ? "chip chip-on" : "chip chip-off";
         noiseCats.insertAdjacentHTML("beforeend", `<span class="${cls}">${c.label}${c.active ? "" : " (off)"}</span>`);
       });
-      dropDecorative.checked = !!params.drop_decorative_image;
     }
     if (qData.ok && qData.queries) {
       const txt = qData.queries.CLINS || qData.queries.FE || qData.queries.CE || "";
@@ -392,25 +388,6 @@ $("#btn-save-query").addEventListener("click", async (e) => {
     log("Save queries error: " + err.message, "error");
   }
   setButtonLoading(btn, false);
-});
-
-dropDecorative.addEventListener("change", async () => {
-  try {
-    const res = await fetch("/config/params", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ drop_decorative_image: dropDecorative.checked }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      noiseStatus.textContent = `saved (decorative ${data.drop_decorative_image ? "on" : "off"})`;
-      log(`Decorative-image dropping ${data.drop_decorative_image ? "ON" : "OFF"}.`, "success");
-    } else {
-      noiseStatus.textContent = "save failed";
-    }
-  } catch (err) {
-    noiseStatus.textContent = "save error: " + err.message;
-  }
 });
 
 // =================================================================
@@ -617,6 +594,68 @@ watchToggle.addEventListener("change", async () => {
     log("Watch toggle error: " + err.message, "error");
     renderWatchState(!want);
   }
+});
+
+// =================================================================
+// Clear residual (destructive — explicit confirm required)
+// =================================================================
+
+const clearBtn = $("#btn-clear");
+
+function showClearModal() {
+  const base = getListenFolder().replace(/[\\/]+$/, "");
+  const listenPath = base || "<Listen Folder>";
+  const condensed = base
+    ? base + "\\Dossier_condensed\\"
+    : "<Listen Folder>\\Dossier_condensed\\";
+  $("#clear-paths").textContent =
+    `Listen Folder: ${listenPath}\nDossier_condensed: ${condensed}`;
+  $("#clear-warning").textContent = base
+    ? "If the Listen Folder is OneDrive-synced, this deletion propagates to the cloud and cannot be undone."
+    : "Set the Listen Folder first — it is required to know what to clear.";
+  $("#clear-modal").classList.remove("hidden");
+}
+
+function hideClearModal() {
+  $("#clear-modal").classList.add("hidden");
+}
+
+clearBtn.addEventListener("click", () => {
+  if (!getListenFolder()) {
+    log("Set the Listen Folder before clearing.", "warn");
+    return;
+  }
+  showClearModal();
+});
+
+$("#clear-cancel").addEventListener("click", hideClearModal);
+$("#clear-modal-close").addEventListener("click", hideClearModal);
+$("#clear-modal-backdrop").addEventListener("click", hideClearModal);
+
+$("#clear-confirm").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  setButtonLoading(btn, true);
+  try {
+    const res = await fetch("/clear", { method: "POST" });
+    const data = await res.json();
+    if (data.ok) {
+      const n = (data.removed || []).length;
+      const errs = (data.errors || []).length;
+      log(
+        `Cleared ${n} item(s) from past runs${errs ? ` (${errs} error(s))` : ""}.`,
+        errs ? "warn" : "success"
+      );
+      (data.errors || []).forEach((er) =>
+        log(`  ✗ ${er.path}: ${er.error}`, "error")
+      );
+    } else {
+      log("Clear failed: " + (data.detail || "unknown error"), "error");
+    }
+  } catch (err) {
+    log("Clear error: " + err.message, "error");
+  }
+  setButtonLoading(btn, false);
+  hideClearModal();
 });
 
 // =================================================================

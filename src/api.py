@@ -18,7 +18,8 @@ Endpoints:
   GET  /queries          — Read the unified query lexicon from queries/query.txt
   POST /queries/save     — Save the unified query lexicon to queries/query.txt
   POST /reset            — Reset project (index + screenshots only)
-  POST /clear-reset      — Safe reset: index + screenshots + output PDF only
+  POST /clear            — Full wipe of past runs: project folders + Dossier_condensed
+                           contents + derived state (index + screenshots + output PDF)
   POST /run-all          — One-click: full chain for ALL project folders,
                            export PDFs to <listen>/Dossier_condensed/
   GET  /run-all/status   — Progress of the one-click run (stage tracker)
@@ -47,6 +48,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .config import (
+    INDEX_DIR,
     OUTPUT_DIR,
     PROJECT_ROOT,
     REPORT_TYPES,
@@ -56,13 +58,10 @@ from .config import (
     get_listen_folders,
     get_listen_folder,
     get_pptx_output_dir,
-    get_drop_decorative_image,
-    set_drop_decorative_image,
     set_pptx_output_dir,
     project_data_dir,
     set_listen_folder,
     NOISE_CATEGORY_LABELS,
-    DROP_DECORATIVE_IMAGE,
 )
 # NOTE: DATA_DIR (the legacy global data/ folder) is intentionally no longer
 # imported here — the pipeline now reads/writes per-project folders
@@ -80,10 +79,10 @@ from .classifier import (
 )
 from .retriever import list_veto_terms, reset_veto_terms
 from .converter import _is_junk_filename
-from .page_index import delete_index, index_exists
 from .orchestrator import (
     CONDENSED_DIR_NAME,
     get_events,
+    open_condensed_folder,
     run_all_start,
     run_all_status,
     watcher,
@@ -120,28 +119,20 @@ app.mount(
 
 class PackageRequest(BaseModel):
     project_id: str = "default"
-    queries: Optional[dict[str, str]] = None
     top_n: Optional[int] = None  # cap of pages PER report type; -1 = All (no cap); None = config default
     project_owner: str = ""  # name of the project owner, shown on the PDF cover
     target_formula: str = ""  # final target formula; baked into the PDF cover
-    delete_floor: Optional[float] = None  # deletion floor override; None = config/frontend default
 
 
 class RunRequest(BaseModel):
     project_id: str = "default"
-    queries: Optional[dict[str, str]] = None
     top_n: Optional[int] = None  # cap of pages PER report type; -1 = All (no cap); None = config default
     project_owner: str = ""  # name of the project owner, shown on the PDF cover
     target_formula: str = ""  # final target formula; baked into the PDF cover
-    delete_floor: Optional[float] = None  # deletion floor override; None = config/frontend default
 
 
 class ScanRequest(BaseModel):
     project_name: str  # folder name under the listen folder (or PROJECT_ROOT) to scan for dossiers
-
-
-class ParamsRequest(BaseModel):
-    drop_decorative_image: Optional[bool] = None  # opt-in decorative-image dropping
 
 
 class ListenFolderRequest(BaseModel):
@@ -264,43 +255,21 @@ async def get_config_params():
     """Return the user-tunable pipeline parameters.
 
     Noise-based deletion is always on. This endpoint exposes the active noise
-    categories, the veto terms (reused from queries/*.txt), and the opt-in
-    decorative-image drop flag so the frontend can render them.
+    categories and the veto terms (reused from queries/query.txt) so the
+    frontend can render them.
     """
     noise_categories = []
     for k in NOISE_CATEGORY_LABELS:
-        active = get_drop_decorative_image() if k == "decorative" else True
         noise_categories.append({
             "key": k,
             "label": NOISE_CATEGORY_LABELS.get(k, k),
-            "active": active,
+            "active": True,
         })
     return {
         "ok": True,
         "noise_enabled": True,
         "noise_categories": noise_categories,
         "veto_terms": list_veto_terms(),
-        "drop_decorative_image": get_drop_decorative_image(),
-        "default_drop_decorative_image": bool(DROP_DECORATIVE_IMAGE),
-    }
-
-
-@app.post("/config/params")
-async def set_config_params(req: ParamsRequest):
-    """Persist a user-tunable pipeline parameter.
-
-    Body (JSON, all optional):
-        drop_decorative_image: bool — opt-in dropping of near-full-page
-                                   decorative images (risky: can also catch
-                                   chart screenshots). Persisted so it applies
-                                   to every run, including Run Full Pipeline.
-    """
-    if req.drop_decorative_image is not None:
-        set_drop_decorative_image(bool(req.drop_decorative_image))
-    return {
-        "ok": True,
-        "drop_decorative_image": get_drop_decorative_image(),
-        "default_drop_decorative_image": bool(DROP_DECORATIVE_IMAGE),
     }
 
 
@@ -447,18 +416,19 @@ async def ingest(project_id: str = "default"):
 
 @app.post("/package")
 async def package(req: PackageRequest):
-    """Run package: per-type lexical match → group → screenshot → merge PDF.
+    """Run package: denoise → screenshot → merge PDF.
 
     Body (JSON):
         project_id: str  (default "default")
-        queries: dict[str, str] | null  (optional per-type query overrides)
+        top_n: int | null  (optional per-type page cap)
+        project_owner: str
+        target_formula: str
     """
     pipeline = _get_pipeline(req.project_id)
     try:
         output_path = pipeline.package(
-            req.queries, top_n=req.top_n,
+            top_n=req.top_n,
             project_owner=req.project_owner, target_formula=req.target_formula,
-            delete_floor=req.delete_floor,
         )
         return {
             "ok": True,
@@ -477,16 +447,17 @@ async def run_pipeline(req: RunRequest):
 
     Body (JSON):
         project_id: str  (default "default")
-        queries: dict[str, str] | null  (optional per-type query overrides)
+        top_n: int | null  (optional per-type page cap)
+        project_owner: str
+        target_formula: str
     """
     pipeline = _get_pipeline(req.project_id)
     try:
         n = pipeline.ingest()
         logger.info(f"Ingested {n} pages for project '{req.project_id}'")
         output_path = pipeline.package(
-            req.queries, top_n=req.top_n,
+            top_n=req.top_n,
             project_owner=req.project_owner, target_formula=req.target_formula,
-            delete_floor=req.delete_floor,
         )
         logger.info(f"Package complete -> {output_path}")
         return {
@@ -536,27 +507,79 @@ async def reset(project_id: str = "default"):
     return {"ok": True, "project_id": project_id}
 
 
-@app.post("/clear-reset")
-async def clear_reset(project_id: str = "default"):
-    """Safe per-project reset for an OneDrive-synced workspace.
+# NOTE: the former /clear-reset endpoint was removed — /clear now performs the
+# same derived-state wipe (index + screenshots + output PDF) on top of deleting
+# the listen-folder project subfolders and Dossier_condensed contents.
 
-    Only derived state is cleared: the page-text index, the screenshot cache,
-    and the generated synthesis PDF. The user's dossier files inside the
-    project folder (PROJECT_ROOT/<project_id>/) are NEVER touched — they are
-    the source of truth and live in a synced directory, so deleting them would
-    be destructive and surprising.
+@app.post("/clear")
+async def clear_residual():
+    """Permanently delete the residual left by past processing runs.
+
+    Scope (IRREVERSIBLE — the frontend requires an explicit confirm first):
+      1) every project subfolder under the Listen Folder (the dossier source
+         files) EXCEPT /Dossier_condensed and system/hidden folders;
+      2) all contents of <Listen Folder>/Dossier_condensed/ (the exported PDFs);
+      3) all *derived* state from previous runs — the page-text index
+         (index_projects/), the screenshot cache (screenshots/), and the
+         generated synthesis PDFs (output/synthesis_input_*.pdf).
+
+    The Listen Folder itself and /Dossier_condensed (the folder, not its
+    contents) are kept so the next run can export into it immediately.
+    Listen-folder paths are intentionally NEVER written to the server log.
     """
-    cleared = 0
+    base = get_listen_folder()
+    if not base:
+        raise HTTPException(400, "No listen folder configured — save one first")
+    base_p = Path(base)
+    if not base_p.exists() or not base_p.is_dir():
+        raise HTTPException(400, f"Listen folder does not exist: {base}")
 
-    # 1) Page-text index.
-    if index_exists(project_id):
+    removed: list[str] = []
+    errors: list[dict] = []
+
+    # 1) Project subfolders under the listen folder (the source dossiers).
+    for child in sorted(base_p.iterdir()):
+        if not child.is_dir():
+            continue
+        if child.name == CONDENSED_DIR_NAME:
+            continue
+        if child.name.startswith(".") or child.name.startswith("~"):
+            continue
         try:
-            delete_index(project_id)
-            cleared += 1
+            shutil.rmtree(child)
+            removed.append(str(child))
         except OSError as e:
-            logger.warning(f"Could not delete index for {project_id}: {e}")
+            logger.warning(f"clear: could not remove {child}: {e}")
+            errors.append({"path": str(child), "error": str(e)})
 
-    # 2) Screenshot cache (global, not inside the project folder).
+    # 2) Everything inside /Dossier_condensed (keep the folder itself).
+    condensed = base_p / CONDENSED_DIR_NAME
+    if condensed.exists():
+        for item in sorted(condensed.iterdir()):
+            try:
+                if item.is_file() or item.is_symlink():
+                    item.unlink()
+                else:
+                    shutil.rmtree(item)
+                removed.append(str(item))
+            except OSError as e:
+                logger.warning(f"clear: could not remove {item}: {e}")
+                errors.append({"path": str(item), "error": str(e)})
+
+    # 3) Derived state (global, lives under PROJECT_ROOT, keyed by project_id).
+    #    These are NOT removed by deleting the listen-folder project subfolders
+    #    above, so wipe them wholesale — they are cheap to regenerate and are
+    #    exactly the "residual of past runs" this button targets.
+    #    (a) page-text index
+    if INDEX_DIR.exists():
+        for f in INDEX_DIR.glob("*.json"):
+            try:
+                f.unlink()
+                removed.append(str(f))
+            except OSError as e:
+                logger.warning(f"clear: could not delete index {f}: {e}")
+                errors.append({"path": str(f), "error": str(e)})
+    #    (b) screenshot cache
     if SCREENSHOTS_DIR.exists():
         for rt in REPORT_TYPES:
             rt_dir = SCREENSHOTS_DIR / rt
@@ -566,27 +589,26 @@ async def clear_reset(project_id: str = "default"):
                 try:
                     if item.is_file() or item.is_symlink():
                         item.unlink()
-                        cleared += 1
-                    elif item.is_dir():
+                    else:
                         shutil.rmtree(item)
-                        cleared += 1
+                    removed.append(str(item))
                 except OSError as e:
-                    logger.warning(f"Could not remove {item}: {e}")
-
-    # 3) Generated synthesis PDF.
-    out_pdf = OUTPUT_DIR / f"synthesis_input_{project_id}.pdf"
-    if out_pdf.exists():
+                    logger.warning(f"clear: could not remove {item}: {e}")
+                    errors.append({"path": str(item), "error": str(e)})
+    #    (c) generated synthesis PDFs
+    for out_pdf in OUTPUT_DIR.glob("synthesis_input_*.pdf"):
         try:
             out_pdf.unlink()
-            cleared += 1
+            removed.append(str(out_pdf))
         except OSError as e:
-            logger.warning(f"Could not delete {out_pdf}: {e}")
+            logger.warning(f"clear: could not delete {out_pdf}: {e}")
+            errors.append({"path": str(out_pdf), "error": str(e)})
 
     logger.info(
-        f"Safe reset for '{project_id}': cleared {cleared} derived item(s) "
-        f"(index + screenshots + output PDF). Dossier files untouched."
+        f"Clear residual: removed {len(removed)} item(s), "
+        f"{len(errors)} error(s)"
     )
-    return {"ok": True, "project_id": project_id, "cleared": cleared}
+    return {"ok": True, "removed": removed, "errors": errors}
 
 
 # ---------------------------------------------------------------------------
@@ -687,7 +709,8 @@ async def get_queries():
     """Read the unified query lexicon from queries/query.txt.
 
     Returns the same text replicated for every report type so the frontend can
-    populate a single editable box and the retriever can score each type:
+    populate a single editable box and the retriever can build veto terms per
+    type (Title Anchors + Table Features sections):
         {"CLINS": "...", "FE": "...", "CE": "..."}
     """
     try:
@@ -772,6 +795,7 @@ async def watch_toggle(req: WatchRequest):
                     400, "No listen folder configured — save one first"
                 )
             watcher.start()
+            open_condensed_folder()
         else:
             watcher.stop()
     except HTTPException:

@@ -131,26 +131,19 @@ class DossierPipeline:
 
     def package(
         self,
-        queries: dict[str, str] | None = None,
         top_n: int | None = None,
         project_owner: str = "",
         target_formula: str = "",
-        delete_floor: float | None = None,
     ) -> Path:
         """Run the full package pipeline and produce a synthesis PDF.
 
         Args:
-            queries: optional per-type query overrides.
-                     If omitted, reads from queries/*.txt files.
             top_n: optional cap of pages kept PER report type (overrides the
                    config default TOP_N_PER_TYPE). Configurable from the
                    frontend or the CLI --top-n flag.
             target_formula: user-supplied final target formula string. When
                    set, it is baked into the cover of the synthesis PDF
                    (metadata injection) to anchor the downstream AI.
-            delete_floor: optional override of the deletion score floor used by
-                   the retriever's DELETE policy. When omitted, the retriever
-                   reads the persisted frontend override (or config default).
 
         Returns:
             Path to the generated PDF.
@@ -162,10 +155,8 @@ class DossierPipeline:
                 "No pages ingested. Run ingest first."
             )
 
-        # 1. Discover relevant pages via the lexical retriever
-        summary_pages = self._discover_summary_pages(
-            queries, top_n=top_n, delete_floor=delete_floor
-        )
+        # 1. Discover relevant pages via the denoising retriever
+        summary_pages = self._discover_summary_pages(top_n=top_n)
 
         # 2. Take high-resolution screenshots for each discovered page
         summary_pages = self._enrich_with_screenshots(summary_pages)
@@ -185,25 +176,17 @@ class DossierPipeline:
 
     def _discover_summary_pages(
         self,
-        queries: dict[str, str] | None = None,
         top_n: int | None = None,
-        delete_floor: float | None = None,
     ) -> list[dict]:
-        """Discover relevant pages via the lexical retriever.
+        """Discover relevant pages via the denoising retriever.
 
         Args:
-            queries: per-type query overrides (or read from files if None).
             top_n: optional per-type page cap forwarded to the retriever.
-            delete_floor: optional deletion-floor override forwarded to the
-                   retriever's DELETE policy.
 
         Returns items shaped {"metadata", "document"}, then deduplicates by
         (filename, page_index) and sorts by (report_type, filename, page).
         """
-        query_map = queries or load_queries_from_files()
-        raw = self.retriever.discover(
-            query_map, top_n=top_n, delete_floor=delete_floor
-        )
+        raw = self.retriever.discover(top_n=top_n)
 
         # Deduplicate: one entry per (filename, page_index)
         seen: set[tuple[str, int]] = set()
@@ -259,7 +242,6 @@ class DossierPipeline:
 
             enriched.append({
                 "text": text,
-                "matched_terms": item["metadata"].get("matched_terms", []),
                 "screenshot": str(screenshot_path) if screenshot_path else None,
                 "filename": item["metadata"].get("filename", ""),
                 "report_type": item["metadata"].get("report_type", ""),
@@ -309,20 +291,16 @@ class DossierPipeline:
 
 def run_full_pipeline(
     project_id: str,
-    queries: dict[str, str] | None = None,
     top_n: int | None = None,
     project_owner: str = "",
     target_formula: str = "",
-    delete_floor: float | None = None,
 ) -> Path:
     """One-shot: ingest + package → return output PDF path.
 
     Args:
         project_id: identifier for the project collection
-        queries: optional per-type query overrides
         top_n: optional cap of pages kept PER report type (overrides config default)
         target_formula: user-supplied final target formula (baked into cover)
-        delete_floor: optional deletion-floor override (see DossierPipeline.package)
     """
     pipeline = DossierPipeline(project_id)
     pipeline.init()
@@ -331,9 +309,8 @@ def run_full_pipeline(
     logger.info(f"Ingested {n} pages for project '{project_id}'")
 
     output_path = pipeline.package(
-        queries, top_n=top_n,
+        top_n=top_n,
         project_owner=project_owner, target_formula=target_formula,
-        delete_floor=delete_floor,
     )
     logger.info(f"Package complete → {output_path}")
     return output_path

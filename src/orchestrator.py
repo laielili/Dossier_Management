@@ -24,7 +24,10 @@ All progress is appended to an in-memory activity feed the frontend polls
 server log files; the activity feed shows project names only.
 """
 
+import os
 import shutil
+import subprocess
+import sys
 import threading
 import time
 from collections import deque
@@ -53,6 +56,47 @@ STAGES = ["scan", "classify", "ingest", "package", "export"]
 
 # One pipeline at a time — manual run and watcher share this lock.
 _processing_lock = threading.Lock()
+
+
+# ---------------------------------------------------------------------------
+# Reveal output folder in the native file manager
+# ---------------------------------------------------------------------------
+
+def open_condensed_folder() -> None:
+    """Open the OS file explorer at <listen>/Dossier_condensed so the user can
+    drag finished PDFs straight into a downstream AI client.
+
+    Triggered when Auto-Watch is switched on and after a pipeline run finishes
+    (manual run-all and watcher auto-processing). Best-effort: any failure
+    (headless server, no display session) is logged and swallowed so it never
+    breaks the pipeline. The folder is created if it does not exist yet.
+    """
+    base = get_listen_folder()
+    if not base:
+        return
+    condensed = Path(base) / CONDENSED_DIR_NAME
+    try:
+        condensed.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        logger.warning(f"open_condensed_folder: cannot create {condensed}: {e}")
+        return
+    _open_in_explorer(condensed)
+    add_event(f"Opened file explorer at {CONDENSED_DIR_NAME}/", "success")
+
+
+def _open_in_explorer(path: Path) -> None:
+    """Reveal `path` in the platform file manager (cross-platform)."""
+    p = str(path)
+    try:
+        if os.name == "nt":
+            os.startfile(p)                       # opens in Explorer, no console
+        elif sys.platform == "darwin":
+            subprocess.run(["open", p], check=False)
+        else:
+            subprocess.run(["xdg-open", p], check=False)
+        logger.info(f"Revealed folder in file explorer: {p}")
+    except Exception as e:
+        logger.warning(f"Could not open file explorer at {p}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +233,7 @@ def run_project_pipeline(project_name: str, stage_cb=None) -> dict:
 
     # -- 4) package -------------------------------------------------------------
     stage("package")
-    output_path = pipeline.package(None)
+    output_path = pipeline.package()
     add_event(f"[{project_name}] package: {output_path.name} generated")
 
     # -- 5) export to <listen>/Dossier_condensed/ -----------------------------
@@ -285,6 +329,9 @@ def _run_all_worker() -> None:
         f"PDFs in {CONDENSED_DIR_NAME}/",
         "success" if bad == 0 else "warn",
     )
+    # Reveal the output folder so the user can drag the finished PDFs
+    # into a downstream AI client.
+    open_condensed_folder()
     _set_job(running=False, finished=True,
              current_project=None, current_stage=None)
 
@@ -446,6 +493,11 @@ class Watcher:
         with _processing_lock:
             try:
                 run_project_pipeline(folder.name)
+                add_event(
+                    f"[{folder.name}] pipeline complete — output in {CONDENSED_DIR_NAME}/",
+                    "success",
+                )
+                open_condensed_folder()
             except Exception as e:
                 logger.exception(f"Watcher pipeline failed for '{folder.name}'")
                 add_event(f"[{folder.name}] FAILED: {e}", "error")

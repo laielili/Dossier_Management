@@ -2,8 +2,8 @@
 PDF generation module — reportlab
 
 Produces a single synthesis-input PDF for a downstream multimodal LLM.
-Each selected page becomes ONE page containing a short structured
-annotation (source / type / key terms) plus a high-resolution screenshot.
+Each selected page becomes ONE page containing a short provenance
+annotation (source / type / page) plus a high-resolution screenshot.
 The raw page text is deliberately NOT embedded — the screenshot is the
 authoritative visual and the raw extraction only adds noise (diagram
 fragments, numbering, leaked paths) that distracts the LLM.
@@ -279,20 +279,18 @@ class PDFGenerator:
             separate fixed-height table, so when the comment wrapped to two
             lines the image no longer fit beside it and was pushed onto the
             next page — orphaning the comment onto a different page.)
-          * The comment is allowed to WRAP to as many lines as needed instead
+            * The comment is allowed to WRAP to as many lines as needed instead
             of being truncated with an ellipsis, so the downstream AI sees the
-            full provenance (source / type / key terms).
+            full provenance (source / type / page).
         """
         filename = item.get("filename", "unknown.pdf")
         report_type = item.get("report_type", "?")
         page_label = item.get("page_label", "?")
         source_rel = self._relative_source(item.get("source_path", ""))
-        matched = item.get("matched_terms", []) or []
-        key_terms = ", ".join(matched[:6]) if matched else "—"
 
         ann_text = (
             f"#{index}  [{report_type}]  {filename}  —  Page {page_label}"
-            f"  |  Source: {source_rel}  |  Key terms: {key_terms}"
+            f"  |  Source: {source_rel}"
         )
 
         # Annotation pinned to the BOTTOM of the page. It wraps freely to as

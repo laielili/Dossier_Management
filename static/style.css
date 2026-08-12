@@ -798,24 +798,6 @@ body {
 .chip-off { color: var(--ink-3); border-style: dashed; background: var(--surface); }
 .chip-veto { color: var(--run-700); border-color: var(--run); background: var(--run-100); font-weight: 600; }
 
-.switch-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  background: var(--surface-sunk);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.switch-row .switch { flex: none; }
-.switch-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink);
-  flex: 1 1 auto;
-  line-height: 1.4;
-}
 .param-status {
   font-size: 12px;
   color: var(--success);
@@ -1239,6 +1221,32 @@ body {
   border-radius: var(--r-sm);
   padding: 6px 10px;
   display: inline-block;
+}
+
+/* ===================== Clear-residual confirmation modal ===================== */
+.clear-list {
+  margin: 0 0 12px 18px;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+.clear-list li { margin-bottom: 4px; }
+#clear-paths {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--ink);
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+}
+#clear-warning {
+  font-size: 12.5px;
+  color: var(--danger);
+  line-height: 1.5;
 }
 
 /* ===================== Page navigation (cross-page links) ===================== */

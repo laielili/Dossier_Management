@@ -86,8 +86,8 @@ def detect_page_signals(page) -> dict:
                         max_font = sp["size"]
     except Exception:
         pass
-    # img_area_ratio: total raster-image area / page area (0..1). Used to spot
-    #   a near-full-page image with no caption (decorative-image noise).
+    # img_area_ratio: total raster-image area / page area (0..1). Gauges how
+    #   image-heavy a page is.
     img_area_ratio = 0.0
     try:
         rect = page.rect

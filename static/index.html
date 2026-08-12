@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Performance Dossier Management — Document Pipeline</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="/static/style.css?v=21">
+<link rel="stylesheet" href="/static/style.css?v=22">
 </head>
 <body>
 
@@ -80,6 +80,13 @@
     <div class="run-dest">
       <span class="dest-label">Output</span>
       <span id="dest-path"></span>
+    </div>
+
+    <div class="button-row secondary">
+      <button class="btn btn-danger" id="btn-clear" type="button"
+        title="Permanently delete past-run residuals: all project folders under the Listen Folder + everything in Dossier_condensed/">
+        Clear residual
+      </button>
     </div>
 
     <!-- stage tracker: hidden until a run starts -->
@@ -181,7 +188,7 @@
           </div>
           <p class="noise-filter-desc">
             Pages are <strong>kept by default</strong> and deleted only when provably noise.
-            <span class="muted">Veto terms rescue evidence-bearing pages; covers &amp; section dividers are always dropped.</span>
+            <span class="muted">Veto terms rescue evidence-bearing pages; cover pages are always dropped. <em>Cover</em> = no table, no list, &lt;3 figures, largest font &ge;20pt, and &lt;60 chars.</span>
           </p>
 
           <div class="noise-section">
@@ -192,23 +199,13 @@
           <div class="noise-section">
             <div class="noise-section-title">Query lexicon <span class="muted">(queries/query.txt)</span></div>
             <div class="query-editor">
-              <label for="query-txt">Title Anchors + Table Features &rarr; veto terms &nbsp;·&nbsp; Metric Keywords / Other &rarr; footer scoring</label>
+              <label for="query-txt">Title Anchors + Table Features &rarr; veto terms (rescue evidence-bearing pages)</label>
               <textarea id="query-txt" rows="10"></textarea>
             </div>
             <button class="btn btn-sm btn-outline" id="btn-save-query"
               title="Write the edited query lexicon back to queries/query.txt">Save</button>
           </div>
 
-          <div class="noise-section">
-            <label class="switch-row" for="drop-decorative" title="Opt-in: drop near-full-page decorative images (can also catch chart screenshots)">
-              <span class="switch">
-                <input type="checkbox" id="drop-decorative">
-                <span class="slider"></span>
-              </span>
-              <span class="switch-label">Drop decorative images</span>
-              <span class="param-status" id="noise-status"></span>
-            </label>
-          </div>
         </div>
       </div>
 
@@ -216,7 +213,33 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=28"></script>
+<!-- ============ Clear-residual confirmation modal ============ -->
+<div id="clear-modal" class="modal hidden">
+  <div class="modal-backdrop" id="clear-modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <h3>Clear past runs?</h3>
+      <button class="modal-close" id="clear-modal-close" type="button" title="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint" style="color: var(--danger); font-weight: 700;">This action is irreversible.</p>
+      <p class="panel-hint">The <strong>Clear</strong> button deletes the residual left by previous processing runs:</p>
+      <ol class="clear-list">
+        <li>Every <strong>project folder</strong> under the Listen Folder &mdash; i.e. your dossier source files.</li>
+        <li>Everything inside <strong>&lt;Listen Folder&gt;/Dossier_condensed/</strong> &mdash; the exported PDFs.</li>
+        <li>All <strong>derived state</strong> from previous runs &mdash; the page-text index, the screenshot cache, and the generated synthesis PDFs.</li>
+      </ol>
+      <p class="panel-hint" id="clear-paths"></p>
+      <p class="panel-hint" id="clear-warning"></p>
+      <div class="modal-foot">
+        <button class="btn btn-sm btn-outline" id="clear-cancel" type="button">Cancel</button>
+        <button class="btn btn-sm btn-danger" id="clear-confirm" type="button">Delete everything</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js?v=30"></script>
 
 </body>
 </html>
