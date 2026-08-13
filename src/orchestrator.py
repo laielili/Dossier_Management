@@ -10,10 +10,11 @@ Two entry points, both driving the same per-project pipeline chain:
                          dropped into it (excluding /Dossier_condensed).
 
 Per-project chain (all stages, in order):
-    scan -> classify -> ingest -> package -> export
+    scan -> classify -> ingest -> condense
 
-Export copies the generated synthesis PDF into
-    <listen_folder>/Dossier_condensed/<project>_synthesis.pdf
+Condense denoises every source dossier (drops noise pages) and writes a
+cleaned copy into
+    <listen_folder>/Dossier_condensed/<project>/
 
 Concurrency: a single global processing lock serializes pipeline work so a
 manual run and a watcher-triggered run can never process concurrently (COM
@@ -34,7 +35,6 @@ from collections import deque
 from pathlib import Path
 
 from .config import (
-    OUTPUT_DIR,
     REPORT_TYPES,
     get_listen_folder,
     project_data_dir,
@@ -52,7 +52,7 @@ CONDENSED_DIR_NAME = "Dossier_condensed"
 
 DOSSIER_EXTS = (".pdf", ".pptx", ".docx")
 
-STAGES = ["scan", "classify", "ingest", "package", "export"]
+STAGES = ["scan", "classify", "ingest", "condense"]
 
 # One pipeline at a time — manual run and watcher share this lock.
 _processing_lock = threading.Lock()
@@ -62,9 +62,13 @@ _processing_lock = threading.Lock()
 # Reveal output folder in the native file manager
 # ---------------------------------------------------------------------------
 
-def open_condensed_folder() -> None:
-    """Open the OS file explorer at <listen>/Dossier_condensed so the user can
-    drag finished PDFs straight into a downstream AI client.
+def open_condensed_folder(project_name: str | None = None) -> None:
+    """Open the OS file explorer at the condensed output folder.
+
+    When ``project_name`` is given, reveals the per-project deliverable folder
+    <listen>/Dossier_condensed/<project_name>/ (the popup after a single
+    project finishes). When omitted, reveals the parent Dossier_condensed/
+    folder (used after a multi-project run-all, which produces many subfolders).
 
     Triggered when Auto-Watch is switched on and after a pipeline run finishes
     (manual run-all and watcher auto-processing). Best-effort: any failure
@@ -75,13 +79,15 @@ def open_condensed_folder() -> None:
     if not base:
         return
     condensed = Path(base) / CONDENSED_DIR_NAME
+    target = condensed / project_name if project_name else condensed
     try:
-        condensed.mkdir(parents=True, exist_ok=True)
+        target.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        logger.warning(f"open_condensed_folder: cannot create {condensed}: {e}")
+        logger.warning(f"open_condensed_folder: cannot create {target}: {e}")
         return
-    _open_in_explorer(condensed)
-    add_event(f"Opened file explorer at {CONDENSED_DIR_NAME}/", "success")
+    _open_in_explorer(target)
+    label = f"{CONDENSED_DIR_NAME}/{project_name}" if project_name else CONDENSED_DIR_NAME
+    add_event(f"Opened file explorer at {label}/", "success")
 
 
 def _open_in_explorer(path: Path) -> None:
@@ -231,22 +237,19 @@ def run_project_pipeline(project_name: str, stage_cb=None) -> dict:
             f"No pages ingested for '{project_name}' — nothing to package"
         )
 
-    # -- 4) package -------------------------------------------------------------
-    stage("package")
-    output_path = pipeline.package()
-    add_event(f"[{project_name}] package: {output_path.name} generated")
-
-    # -- 5) export to <listen>/Dossier_condensed/ -----------------------------
-    stage("export")
+    # -- 4) condense: denoise + write cleaned per-doc PDFs --------------------
+    stage("condense")
     base = get_listen_folder()
     if not base:
         raise RuntimeError("No listen folder configured — cannot export")
     condensed = Path(base) / CONDENSED_DIR_NAME
     condensed.mkdir(parents=True, exist_ok=True)
-    dest = condensed / f"{project_name}_synthesis.pdf"
-    shutil.copy2(str(output_path), str(dest))
+    project_out = condensed / project_name
+    result = pipeline.condense(output_dir=project_out)
     add_event(
-        f"[{project_name}] export: saved to {CONDENSED_DIR_NAME}/{dest.name}",
+        f"[{project_name}] condense: {result['sources_processed']} source(s), "
+        f"{result['pages_dropped']} noise page(s) dropped -> "
+        f"{CONDENSED_DIR_NAME}/{project_name}/",
         "success",
     )
 
@@ -255,7 +258,8 @@ def run_project_pipeline(project_name: str, stage_cb=None) -> dict:
         "files_classified": len(results),
         "unknown": unknown,
         "pages_ingested": n_pages,
-        "output": dest.name,
+        "output_dir": str(project_out),
+        "files_written": result["files_written"],
     }
 
 
@@ -329,8 +333,9 @@ def _run_all_worker() -> None:
         f"PDFs in {CONDENSED_DIR_NAME}/",
         "success" if bad == 0 else "warn",
     )
-    # Reveal the output folder so the user can drag the finished PDFs
-    # into a downstream AI client.
+    # Reveal the output folder so the user can drag the finished (denoised)
+    # files into a downstream AI client. For a run-all we open the parent
+    # Dossier_condensed/ (it now holds one subfolder per project).
     open_condensed_folder()
     _set_job(running=False, finished=True,
              current_project=None, current_stage=None)
@@ -494,10 +499,11 @@ class Watcher:
             try:
                 run_project_pipeline(folder.name)
                 add_event(
-                    f"[{folder.name}] pipeline complete — output in {CONDENSED_DIR_NAME}/",
+                    f"[{folder.name}] pipeline complete — output in "
+                    f"{CONDENSED_DIR_NAME}/{folder.name}/",
                     "success",
                 )
-                open_condensed_folder()
+                open_condensed_folder(folder.name)
             except Exception as e:
                 logger.exception(f"Watcher pipeline failed for '{folder.name}'")
                 add_event(f"[{folder.name}] FAILED: {e}", "error")

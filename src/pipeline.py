@@ -1,12 +1,16 @@
 """
-Core pipeline — ingest & package orchestration.
+Core pipeline — ingest & condense orchestration.
 
-Ingest:   parse all PDFs in /data/{CLINS,FE,CE}/ -> build a lightweight page-text
-          index (no embeddings, no vector store).
-Package:  discover relevant pages via the lexical retriever
-          -> screenshot -> merge PDF.
+Ingest:    parse all PDFs in <project>/{CLINS,FE,CE}/ -> build a lightweight
+           page-text index (no embeddings, no vector store).
+Condense:  discover the denoised page set via the lexical retriever, then write
+           a cleaned copy of every source dossier (noise pages removed) into the
+           deliverable folder as faithful per-document vector PDFs. The merged
+           single-file synthesis PDF was discontinued: the downstream client
+           accepts multiple files but rejects any single file over 50 MB.
 """
 
+import fitz  # PyMuPDF
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -16,14 +20,12 @@ from .config import (
     QUERIES_DIR,
     REPORT_TYPES,
     SCREENSHOTS_DIR,
+    DELETE_MIN_KEEP,
     project_data_dir,
 )
 from .logger import get_logger
-from .pdf_generator import PDFGenerator
-from .pdf_parser import PDFParser
 from .page_index import (
     build_index,
-    load_index,
     index_count,
     delete_index,
 )
@@ -126,130 +128,115 @@ class DossierPipeline:
         return total_pages
 
     # ------------------------------------------------------------------
-    # Package
+    # Condense (denoise each source dossier -> cleaned per-doc PDFs)
     # ------------------------------------------------------------------
 
-    def package(
+    def condense(
         self,
+        output_dir: Path | str,
         top_n: int | None = None,
-        project_owner: str = "",
-        target_formula: str = "",
-    ) -> Path:
-        """Run the full package pipeline and produce a synthesis PDF.
+    ) -> dict:
+        """Denoise every source dossier and write cleaned per-document PDFs.
+
+        For each typed source PDF (CLINS / FE / CE) discovered at ingest, the
+        pages the denoising retriever classifies as noise are dropped and the
+        surviving pages are written to a faithful vector copy under
+        ``output_dir/<report_type>/<filename>.pdf``.
+
+        This replaces the old single merged synthesis PDF. The downstream
+        client accepts many files but rejects any single file over 50 MB, so
+        we keep the dossiers as separate, denoised documents instead of one
+        giant combined file.
 
         Args:
-            top_n: optional cap of pages kept PER report type (overrides the
-                   config default TOP_N_PER_TYPE). Configurable from the
-                   frontend or the CLI --top-n flag.
-            target_formula: user-supplied final target formula string. When
-                   set, it is baked into the cover of the synthesis PDF
-                   (metadata injection) to anchor the downstream AI.
+            output_dir: base folder for the deliverable (typically
+                <listen>/Dossier_condensed/<project>/).
+            top_n: optional per-type page cap forwarded to the retriever
+                (None = no ceiling).
 
         Returns:
-            Path to the generated PDF.
+            dict with keys: output_dir, files_written (list of
+            "<report_type>/<filename>" strings), pages_dropped,
+            sources_processed.
         """
         self.init()
-
         if self.retriever.count() == 0:
-            raise RuntimeError(
-                "No pages ingested. Run ingest first."
-            )
+            raise RuntimeError("No pages ingested. Run ingest first.")
 
-        # 1. Discover relevant pages via the denoising retriever
-        summary_pages = self._discover_summary_pages(top_n=top_n)
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-        # 2. Take high-resolution screenshots for each discovered page
-        summary_pages = self._enrich_with_screenshots(summary_pages)
+        # Survivors returned by the denoising retriever, shaped
+        # {"metadata": {report_type, filename, page_index, page_label,
+        #  source_path, selected_by}, "document": "<page text>"}.
+        survivors = self.retriever.discover(top_n=top_n)
 
-        # 3. Generate synthesis PDF (with the target-formula banner on the cover)
-        generator = PDFGenerator()
-        output_path = generator.generate(
-            self.project_id, summary_pages,
-            project_owner=project_owner, target_formula=target_formula,
-        )
+        # Group survivors by source_path -> (sorted page indices, report_type).
+        kept: dict[str, dict] = {}
+        for item in survivors:
+            meta = item.get("metadata", {})
+            src = meta.get("source_path", "")
+            if not src:
+                continue
+            rt = meta.get("report_type", "")
+            entry = kept.setdefault(src, {"indices": set(), "report_type": rt})
+            entry["indices"].add(meta.get("page_index", 0))
 
-        return output_path
+        files_written: list[str] = []
+        pages_dropped = 0
+        sources_processed = 0
 
-    # ------------------------------------------------------------------
-    # Per-type page discovery (delegated to the retriever)
-    # ------------------------------------------------------------------
+        for src, info in kept.items():
+            src_path = Path(src)
+            if not src_path.exists():
+                logger.warning(f"condense: source missing, skipped: {src}")
+                continue
 
-    def _discover_summary_pages(
-        self,
-        top_n: int | None = None,
-    ) -> list[dict]:
-        """Discover relevant pages via the denoising retriever.
+            rt = info["report_type"] or "UNKNOWN"
+            dest_dir = output_dir / rt
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / src_path.name
 
-        Args:
-            top_n: optional per-type page cap forwarded to the retriever.
+            try:
+                doc = fitz.open(str(src_path))
+            except Exception as e:
+                logger.warning(f"condense: cannot open {src}: {e}")
+                continue
 
-        Returns items shaped {"metadata", "document"}, then deduplicates by
-        (filename, page_index) and sorts by (report_type, filename, page).
-        """
-        raw = self.retriever.discover(top_n=top_n)
-
-        # Deduplicate: one entry per (filename, page_index)
-        seen: set[tuple[str, int]] = set()
-        deduped: list[dict] = []
-        for r in raw:
-            key = (
-                r["metadata"].get("filename", ""),
-                r["metadata"].get("page_index", -1),
-            )
-            if key not in seen:
-                seen.add(key)
-                deduped.append(r)
-
-        # Sort: report_type -> filename -> page_index
-        deduped.sort(key=lambda r: (
-            r["metadata"].get("report_type", ""),
-            r["metadata"].get("filename", "").lower(),
-            r["metadata"].get("page_index", 0),
-        ))
+            try:
+                total = doc.page_count
+                indices = sorted(info["indices"])
+                if not indices:
+                    # Per-source safety net (mirrors the retriever's per-type
+                    # safeguard): keep the first few pages rather than emit a
+                    # broken empty PDF.
+                    indices = list(range(min(DELETE_MIN_KEEP, total)))
+                # Drop every page NOT in `indices`; kept pages stay in their
+                # original order (indices are ascending).
+                doc.select(indices)
+                pages_dropped += (total - doc.page_count)
+                doc.save(str(dest))
+                files_written.append(f"{rt}/{src_path.name}")
+                sources_processed += 1
+                logger.info(
+                    f"condense: {src_path.name} -> kept {doc.page_count}/"
+                    f"{total} pages -> {dest}"
+                )
+            except Exception as e:
+                logger.warning(f"condense: failed writing {dest}: {e}")
+            finally:
+                doc.close()
 
         logger.info(
-            f"Discovered {len(deduped)} unique pages across all types "
-            f"(after deduplication)"
+            f"Condense complete: {sources_processed} source(s), "
+            f"{len(files_written)} file(s) written to {output_dir}"
         )
-        return deduped
-
-    def _enrich_with_screenshots(
-        self,
-        summary_pages: list[dict],
-    ) -> list[dict]:
-        """Open each source PDF, take a high-res screenshot of the page,
-        and add 'screenshot' and 'text' fields to every item."""
-        enriched: list[dict] = []
-        for item in summary_pages:
-            source = item["metadata"].get("source_path", "")
-            page_idx = item["metadata"].get("page_index", 0)
-
-            text = item.get("document", "")
-            screenshot_path = None
-
-            if source and Path(source).exists():
-                try:
-                    with PDFParser(Path(source)) as parser:
-                        screenshot_path = parser.screenshot_page(page_idx)
-                        # Re-extract text from the actual page for accuracy
-                        page_text = parser.extract_text(page_idx)
-                        if page_text.strip():
-                            text = page_text.strip()
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to screenshot {source} page {page_idx}: {e}"
-                    )
-
-            enriched.append({
-                "text": text,
-                "screenshot": str(screenshot_path) if screenshot_path else None,
-                "filename": item["metadata"].get("filename", ""),
-                "report_type": item["metadata"].get("report_type", ""),
-                "page_label": item["metadata"].get("page_label", 1),
-                "source_path": source,
-            })
-
-        return enriched
+        return {
+            "output_dir": str(output_dir),
+            "files_written": files_written,
+            "pages_dropped": pages_dropped,
+            "sources_processed": sources_processed,
+        }
 
     # ------------------------------------------------------------------
     # Reset
@@ -292,15 +279,15 @@ class DossierPipeline:
 def run_full_pipeline(
     project_id: str,
     top_n: int | None = None,
-    project_owner: str = "",
-    target_formula: str = "",
-) -> Path:
-    """One-shot: ingest + package → return output PDF path.
+    output_dir: str | None = None,
+) -> dict:
+    """One-shot: ingest + condense -> return the condense result dict.
 
     Args:
         project_id: identifier for the project collection
-        top_n: optional cap of pages kept PER report type (overrides config default)
-        target_formula: user-supplied final target formula (baked into cover)
+        top_n: optional per-type page cap forwarded to the retriever
+        output_dir: deliverable folder; defaults to
+            <listen>/Dossier_condensed/<project_id>/
     """
     pipeline = DossierPipeline(project_id)
     pipeline.init()
@@ -308,12 +295,13 @@ def run_full_pipeline(
     n = pipeline.ingest()
     logger.info(f"Ingested {n} pages for project '{project_id}'")
 
-    output_path = pipeline.package(
-        top_n=top_n,
-        project_owner=project_owner, target_formula=target_formula,
-    )
-    logger.info(f"Package complete → {output_path}")
-    return output_path
+    if output_dir is None:
+        base = project_data_dir(project_id).parent
+        output_dir = Path(base) / "Dossier_condensed" / project_id
+
+    result = pipeline.condense(output_dir=output_dir, top_n=top_n)
+    logger.info(f"Condense complete -> {result['output_dir']}")
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -316,7 +316,7 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-/* Run (Ingest & Package) — the gold accent, stands out */
+/* Run (Ingest & Condense) — the gold accent, stands out */
 .btn-accent {
   background: var(--run);
   color: #fff;

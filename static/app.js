@@ -7,9 +7,9 @@
      2. Configuration  — collapsible accordions in the Config modal:
                          classification anchors (classify/*.txt) + noise
                          filtering (deleted noise types, veto terms)
-     3. Run Pipeline   — ONE button: scan → classify → ingest → package
-                         → export for every project folder in the listen
-                         folder; PDFs land in <listen>/Dossier_condensed/
+     3. Run Pipeline   — ONE button: scan → classify → ingest → condense
+                         for every project folder in the listen folder;
+                         denoised PDFs land in <listen>/Dossier_condensed/<project>/
    ============================================================ */
 
 // --- DOM helpers ---
@@ -419,7 +419,7 @@ function setActivityPolling(fast) {
 // One-click full pipeline (run-all + stage tracker)
 // =================================================================
 
-const STAGES = ["scan", "classify", "ingest", "package", "export"];
+const STAGES = ["scan", "classify", "ingest", "condense"];
 const runBtn = $("#btn-run-all");
 let runPollTimer = null;
 
@@ -487,7 +487,7 @@ async function pollRunStatus() {
       const resultText = $("#run-result-text");
       if (errCount === 0) {
         resultText.textContent =
-          `\u2713 Pipeline finished — ${okCount} PDF(s) saved to Dossier_condensed/`;
+          `\u2713 Pipeline finished — ${okCount} project(s) condensed; denoised PDFs saved to Dossier_condensed/<project>/`;
         resultText.className = "success";
       } else {
         resultText.textContent =

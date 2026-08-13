@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from src.classifier import Classifier
+from src.config import project_data_dir
 from src.logger import get_logger
 from src.pipeline import DossierPipeline, run_full_pipeline
 
@@ -72,18 +73,26 @@ def cmd_classify(args):
 def cmd_package(args):
     pipeline = DossierPipeline(args.project_id)
     pipeline.init()
-    output_path = pipeline.package(
-        top_n=args.top_n, target_formula=args.target_formula
+    output_dir = (
+        project_data_dir(args.project_id).parent
+        / "Dossier_condensed"
+        / args.project_id
     )
-    print(f"\nPackage complete: {output_path}")
+    result = pipeline.condense(output_dir=output_dir, top_n=args.top_n)
+    print(f"\nCondense complete: {result['output_dir']}")
+    print(
+        f"  sources: {result['sources_processed']}, "
+        f"pages dropped: {result['pages_dropped']}"
+    )
 
 
 def cmd_run(args):
-    output_path = run_full_pipeline(
-        args.project_id, top_n=args.top_n,
-        target_formula=args.target_formula,
+    result = run_full_pipeline(args.project_id, top_n=args.top_n)
+    print(f"\nFull pipeline complete: {result['output_dir']}")
+    print(
+        f"  sources: {result['sources_processed']}, "
+        f"pages dropped: {result['pages_dropped']}"
     )
-    print(f"\nFull pipeline complete: {output_path}")
 
 
 def cmd_reset(args):
@@ -162,36 +171,28 @@ Examples:
     p_ingest.set_defaults(func=cmd_ingest)
 
     # package
-    p_pkg = sub.add_parser("package", help="Lexical match + screenshot + merge PDF")
+    p_pkg = sub.add_parser(
+        "package", help="Denoise source PDFs -> cleaned per-document PDFs"
+    )
     p_pkg.add_argument("project_id", nargs="?", default="default")
     p_pkg.add_argument(
         "--top-n",
         type=int,
         default=None,
         help="Max pages kept PER report type (CLINS/FE/CE). "
-             "Default 12 if omitted. Use -1 for no cap (All).",
-    )
-    p_pkg.add_argument(
-        "--target-formula",
-        default="",
-        help="Final target formula baked into the PDF cover (metadata injection).",
+             "Default: no cap (keep all survivors).",
     )
     p_pkg.set_defaults(func=cmd_package)
 
     # run
-    p_run = sub.add_parser("run", help="One-shot: ingest + package")
+    p_run = sub.add_parser("run", help="One-shot: ingest + condense")
     p_run.add_argument("--project-id", default="default")
     p_run.add_argument(
         "--top-n",
         type=int,
         default=None,
         help="Max pages kept PER report type (CLINS/FE/CE). "
-             "Default 12 if omitted. Use -1 for no cap (All).",
-    )
-    p_run.add_argument(
-        "--target-formula",
-        default="",
-        help="Final target formula baked into the PDF cover (metadata injection).",
+             "Default: no cap (keep all survivors).",
     )
     p_run.set_defaults(func=cmd_run)
 

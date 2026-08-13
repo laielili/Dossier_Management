@@ -53,8 +53,8 @@
         </div>
         <div class="watch-sub">
           When ON, the app monitors the Listen Folder. Any <strong>new project folder</strong> dropped in
-          is picked up (after its upload finishes) and the full pipeline runs automatically. Results go to
-          <strong>Dossier_condensed/</strong>.
+          is picked up (after its upload finishes) and the full pipeline runs automatically. Denoised files land in
+          <strong>Dossier_condensed/&lt;project&gt;/</strong>.
         </div>
         <div class="watch-exclude">excluded from watch: /Dossier_condensed</div>
       </div>
@@ -68,11 +68,11 @@
   <!-- ============ Run Pipeline (one-click workflow) ============ -->
   <section class="card run-card">
     <h2>Run Pipeline</h2>
-    <p class="hint">One click runs the whole pipeline for every project folder found in the Listen Folder: <strong>scan &rarr; classify &rarr; ingest &rarr; package</strong>. Finished PDFs are saved to <strong>&lt;Listen Folder&gt;/Dossier_condensed/</strong>. Noise filtering is always on &mdash; tune it in the <strong>Config</strong> button above.</p>
+    <p class="hint">One click runs the whole pipeline for every project folder found in the Listen Folder: <strong>scan &rarr; classify &rarr; ingest &rarr; condense</strong>. Each source dossier is denoised (noise pages dropped) and saved as a cleaned per-document PDF under <strong>&lt;Listen Folder&gt;/Dossier_condensed/&lt;project&gt;/</strong> (one subfolder per project, organized by CLINS/FE/CE). Noise filtering is always on &mdash; tune it in the <strong>Config</strong> button above.</p>
 
     <div class="button-row">
       <button class="btn btn-accent btn-run-all" id="btn-run-all"
-        title="Run the full pipeline (scan, classify, ingest, package, export) for all project folders">
+        title="Run the full pipeline (scan, classify, ingest, condense) for all project folders">
         &#9654;&nbsp; Run Full Pipeline
       </button>
     </div>
@@ -97,9 +97,7 @@
       <span class="stage-sep"></span>
       <span class="stage" data-stage="ingest"><span class="dot">3</span>Ingest</span>
       <span class="stage-sep"></span>
-      <span class="stage" data-stage="package"><span class="dot">4</span>Package</span>
-      <span class="stage-sep"></span>
-      <span class="stage" data-stage="export"><span class="dot">5</span>Export</span>
+      <span class="stage" data-stage="condense"><span class="dot">4</span>Condense</span>
     </div>
     <p class="muted hidden" id="run-progress" style="margin-top:8px;"></p>
 
@@ -226,8 +224,8 @@
       <p class="panel-hint">The <strong>Clear</strong> button deletes the residual left by previous processing runs:</p>
       <ol class="clear-list">
         <li>Every <strong>project folder</strong> under the Listen Folder &mdash; i.e. your dossier source files.</li>
-        <li>Everything inside <strong>&lt;Listen Folder&gt;/Dossier_condensed/</strong> &mdash; the exported PDFs.</li>
-        <li>All <strong>derived state</strong> from previous runs &mdash; the page-text index, the screenshot cache, and the generated synthesis PDFs.</li>
+        <li>Everything inside <strong>&lt;Listen Folder&gt;/Dossier_condensed/</strong> &mdash; the condensed per-document PDFs.</li>
+        <li>All <strong>derived state</strong> from previous runs &mdash; the page-text index and the screenshot cache.</li>
       </ol>
       <p class="panel-hint" id="clear-paths"></p>
       <p class="panel-hint" id="clear-warning"></p>

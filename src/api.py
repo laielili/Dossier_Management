@@ -11,17 +11,16 @@ Endpoints:
   GET  /classify/profiles     — Read type profiles from classify/*.txt
   POST /classify/profiles/save — Save type profiles to classify/*.txt
   POST /ingest           — Trigger ingest (reads <project>/{CLINS,FE,CE}/)
-  POST /package          — Trigger package → generate synthesis PDF
-  POST /run              — One-click: ingest + package
+  POST /package          — Trigger condense (denoise source dossiers → per-doc PDFs)
+  POST /run              — One-click: ingest + condense
   GET  /status           — Index stats
-  GET  /download/{pid}  — Download the output PDF
   GET  /queries          — Read the unified query lexicon from queries/query.txt
   POST /queries/save     — Save the unified query lexicon to queries/query.txt
   POST /reset            — Reset project (index + screenshots only)
   POST /clear            — Full wipe of past runs: project folders + Dossier_condensed
-                           contents + derived state (index + screenshots + output PDF)
+                           contents + derived state (index + screenshots)
   POST /run-all          — One-click: full chain for ALL project folders,
-                           export PDFs to <listen>/Dossier_condensed/
+                           condense into <listen>/Dossier_condensed/<project>/
   GET  /run-all/status   — Progress of the one-click run (stage tracker)
   GET  /activity         — Incremental activity feed for the frontend log
   GET  /watch            — Auto-watch state
@@ -49,7 +48,6 @@ from pydantic import BaseModel
 
 from .config import (
     INDEX_DIR,
-    OUTPUT_DIR,
     PROJECT_ROOT,
     REPORT_TYPES,
     SCREENSHOTS_DIR,
@@ -416,26 +414,29 @@ async def ingest(project_id: str = "default"):
 
 @app.post("/package")
 async def package(req: PackageRequest):
-    """Run package: denoise → screenshot → merge PDF.
+    """Run condense: denoise each source dossier -> cleaned per-doc PDFs.
 
     Body (JSON):
         project_id: str  (default "default")
         top_n: int | null  (optional per-type page cap)
-        project_owner: str
-        target_formula: str
+    The deliverable is written to <listen>/Dossier_condensed/<project_id>/.
     """
     pipeline = _get_pipeline(req.project_id)
     try:
-        output_path = pipeline.package(
-            top_n=req.top_n,
-            project_owner=req.project_owner, target_formula=req.target_formula,
-        )
+        base = get_listen_folder()
+        if not base:
+            raise HTTPException(400, "No listen folder configured — save one first")
+        out_dir = Path(base) / CONDENSED_DIR_NAME / req.project_id
+        result = pipeline.condense(output_dir=out_dir, top_n=req.top_n)
         return {
             "ok": True,
             "project_id": req.project_id,
-            "output_file": output_path.name,
-            "output_path": str(output_path),
+            "output_dir": str(out_dir),
+            "files_written": result["files_written"],
+            "pages_dropped": result["pages_dropped"],
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Package failed")
         raise HTTPException(500, str(e))
@@ -443,31 +444,35 @@ async def package(req: PackageRequest):
 
 @app.post("/run")
 async def run_pipeline(req: RunRequest):
-    """One-click: ingest + package.
+    """One-click: ingest + condense.
 
     Body (JSON):
         project_id: str  (default "default")
         top_n: int | null  (optional per-type page cap)
-        project_owner: str
-        target_formula: str
+    The deliverable (cleaned per-doc PDFs) is written to
+    <listen>/Dossier_condensed/<project_id>/.
     """
     pipeline = _get_pipeline(req.project_id)
     try:
         n = pipeline.ingest()
         logger.info(f"Ingested {n} pages for project '{req.project_id}'")
-        output_path = pipeline.package(
-            top_n=req.top_n,
-            project_owner=req.project_owner, target_formula=req.target_formula,
-        )
-        logger.info(f"Package complete -> {output_path}")
+        base = get_listen_folder()
+        if not base:
+            raise HTTPException(400, "No listen folder configured — save one first")
+        out_dir = Path(base) / CONDENSED_DIR_NAME / req.project_id
+        result = pipeline.condense(output_dir=out_dir, top_n=req.top_n)
+        logger.info(f"Condense complete -> {out_dir}")
         return {
             "ok": True,
             "project_id": req.project_id,
             "pages_ingested": n,
-            "output_file": output_path.name,
-            "output_path": str(output_path),
+            "output_dir": str(out_dir),
+            "files_written": result["files_written"],
+            "pages_dropped": result["pages_dropped"],
             "total_pages": pipeline.total_pages,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Run pipeline failed")
         raise HTTPException(500, str(e))
@@ -487,15 +492,14 @@ async def status(project_id: str = "default"):
 
 @app.get("/download/{project_id}")
 async def download(project_id: str):
-    """Download the generated synthesis PDF."""
-    output_path = OUTPUT_DIR / f"synthesis_input_{project_id}.pdf"
-    if not output_path.exists():
-        raise HTTPException(404, f"Output not found for project '{project_id}'")
+    """Deprecated.
 
-    return FileResponse(
-        str(output_path),
-        media_type="application/pdf",
-        filename=output_path.name,
+    Output is now a folder of per-document PDFs under
+    <listen>/Dossier_condensed/<project_id>/, not a single file, so there is
+    nothing to download here. Kept as a 404 so any stale client fails clearly.
+    """
+    raise HTTPException(
+        404, "Output is now a folder; see <listen>/Dossier_condensed/<project_id>/"
     )
 
 
@@ -508,8 +512,8 @@ async def reset(project_id: str = "default"):
 
 
 # NOTE: the former /clear-reset endpoint was removed — /clear now performs the
-# same derived-state wipe (index + screenshots + output PDF) on top of deleting
-# the listen-folder project subfolders and Dossier_condensed contents.
+# same derived-state wipe (index + screenshots) on top of deleting the
+# listen-folder project subfolders and Dossier_condensed contents.
 
 @app.post("/clear")
 async def clear_residual():
@@ -520,8 +524,7 @@ async def clear_residual():
          files) EXCEPT /Dossier_condensed and system/hidden folders;
       2) all contents of <Listen Folder>/Dossier_condensed/ (the exported PDFs);
       3) all *derived* state from previous runs — the page-text index
-         (index_projects/), the screenshot cache (screenshots/), and the
-         generated synthesis PDFs (output/synthesis_input_*.pdf).
+         (index_projects/) and the screenshot cache (screenshots/).
 
     The Listen Folder itself and /Dossier_condensed (the folder, not its
     contents) are kept so the next run can export into it immediately.
@@ -595,15 +598,6 @@ async def clear_residual():
                 except OSError as e:
                     logger.warning(f"clear: could not remove {item}: {e}")
                     errors.append({"path": str(item), "error": str(e)})
-    #    (c) generated synthesis PDFs
-    for out_pdf in OUTPUT_DIR.glob("synthesis_input_*.pdf"):
-        try:
-            out_pdf.unlink()
-            removed.append(str(out_pdf))
-        except OSError as e:
-            logger.warning(f"clear: could not delete {out_pdf}: {e}")
-            errors.append({"path": str(out_pdf), "error": str(e)})
-
     logger.info(
         f"Clear residual: removed {len(removed)} item(s), "
         f"{len(errors)} error(s)"
