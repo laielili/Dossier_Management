@@ -215,7 +215,23 @@ class DossierPipeline:
                 # original order (indices are ascending).
                 doc.select(indices)
                 pages_dropped += (total - doc.page_count)
-                doc.save(str(dest))
+                # Re-compress on save: the default fitz save() leaves internal
+                # streams uncompressed (garbage=0, deflate=0, use_objstms=0),
+                # which expands a real (Office/Adobe-exported) PDF and can make
+                # the output LARGER than the source despite fewer pages. Turning
+                # on deflate* + use_objstms + garbage/clean re-packs the
+                # surviving content losslessly — no pixel/vector change, so the
+                # downstream AI client reads it identically. Combined with the
+                # denoise page drop, the output should come out smaller.
+                doc.save(
+                    str(dest),
+                    garbage=3,
+                    clean=1,
+                    deflate=1,
+                    deflate_images=1,
+                    deflate_fonts=1,
+                    use_objstms=1,
+                )
                 files_written.append(f"{rt}/{src_path.name}")
                 sources_processed += 1
                 logger.info(

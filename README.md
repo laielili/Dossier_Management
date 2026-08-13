@@ -60,7 +60,7 @@ the PDFs it already has.*
 │     src/orchestrator.py — run-all job, folder Watcher,         │
 │                           activity feed, processing lock       │
 │     src/pipeline.py     — DossierPipeline (ingest / condense)  │
-│     main.py             — CLI (serve/classify/ingest/condense/ │
+│     main.py             — CLI (serve/classify/ingest/package/ │
 │                           run/reset)                           │
 ├────────────────────────────────────────────────────────────────┤
 │  3. Processing Layer                                           │
@@ -226,6 +226,12 @@ emitted as a **faithful vector copy** of the original document:
 * **Noise pages are removed; survivors stay in their original order.**
 * **One cleaned file per source dossier**, written to
   `Dossier_condensed/<project>/<type>/<same-filename>.pdf`.
+* **Outputs are re-compressed losslessly on save.** The surviving pages are
+  re-packed with `garbage=3 / clean / deflate / use_objstms`, so the cleaned
+  file is typically *smaller* than the source even though every vector and
+  bitmap is preserved byte-for-byte (no re-rasterisation). This adds head-room
+  under the downstream client's 50 MB per-file ceiling, on top of the page-drop
+  itself.
 
 Because each deliverable is just a trimmed copy of one moderate-sized source, no
 single file balloons past the downstream client's 50 MB limit — which is exactly
@@ -249,11 +255,11 @@ Listen Folder; falls back to the repo root when no Listen Folder is saved):
 ```bash
 python main.py classify --project-id PROJ-001   # sort top-level dossiers into CLINS/FE/CE
 python main.py ingest   --project-id PROJ-001   # parse + build the page index
-python main.py condense PROJ-001                # denoise each source dossier → cleaned per-doc PDFs
-python main.py run      --project-id PROJ-001   # ingest + condense in one shot
+python main.py package  PROJ-001                # denoise each source dossier → cleaned per-doc PDFs
+python main.py run      --project-id PROJ-001   # ingest + condense (package) in one shot
 python main.py reset    --project-id PROJ-001   # clear index + screenshots
 
-# condense/run extras
+# package/run extras
   --top-n 12              optional per-type ceiling (-1 = no cap; default: none)
 ```
 
@@ -284,7 +290,7 @@ python main.py reset    --project-id PROJ-001   # clear index + screenshots
 | `GET/POST`   | `/classify/profiles[/save]`| Read / write `classify/*.txt`                               |
 | `GET/POST`   | `/queries[/save]`          | Read / write `queries/query.txt`                            |
 | `POST`       | `/ingest`                  | Per-project: parse + build the page index                   |
-| `POST`       | `/package` `/condense` `/run`| Per-project pipeline steps (denoise source dossiers)    |
+| `POST`       | `/package` `/run`            | Per-project pipeline steps (denoise source dossiers)            |
 | `GET`        | `/status`                  | Index stats                                                 |
 | `POST`       | `/reset`                   | Clear index + screenshots (derived state only)              |
 | `POST`       | `/clear`                   | Full wipe: project folders + Dossier_condensed + derived state (index/screenshots) |
