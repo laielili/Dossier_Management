@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import fitz  # PyMuPDF
+import pymupdf as fitz  # PyMuPDF
 from PIL import Image
 from pptx import Presentation
 from pptx.util import Emu, Inches
@@ -128,11 +128,11 @@ class DeckRenderer:
         return x, y, w, h
 
     def _svg_to_image(self, svg_text: str) -> Image.Image:
-        """Render an SVG string to a Pillow RGBA image via fitz."""
+        """Render an SVG string to a Pillow RGBA image via PyMuPDF."""
         try:
             doc = fitz.open(stream=svg_text.encode("utf-8"), filetype="svg")
             pix = doc[0].get_pixmap(dpi=self.dpi, alpha=True)
-            # fitz pixmap -> PIL Image without intermediate file.
+            # PyMuPDF pixmap -> PIL Image without intermediate file.
             return Image.frombytes("RGBA", [pix.width, pix.height], pix.samples)
         except Exception as exc:
             raise RenderError(f"Failed to render SVG to image: {exc}") from exc

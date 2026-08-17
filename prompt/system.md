@@ -221,38 +221,50 @@ The most recent JSON produced in this window (or its path / content). If none is
 
 ### Output
 
-Output ONLY the `<deck>` XML — no conversational text, no markdown fences, before or after. Grammar:
+Output ONLY the `<deck>` XML — no conversational text, no markdown fences, before or after. Grammar (engine-enforced — the `<deck>` needs a `project` attribute, and every component carries a `type`):
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?>
 <deck project="<JSON.project_info.project_name>" theme="loreal">
-  <component type="title">![svg](data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgODAwIDQwIiB3aWR0aD0iODAwIiBoZWlnaHQ9IjQwIj7igKY8L3N2Zz4=)</component>
-  <component type="formula-ref">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>
-  <component type="meta">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>
-  <component type="info-card" label="Formulation">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>
-  <component type="info-card" label="Fragrance">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>
-  <component type="info-card" label="Packaging">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>
-  <component type="info-card" label="Sustainability">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>
-  <component type="info-card" label="Safety">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>
-  <component type="efficacy-table">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>   
-  <component type="consumer-block">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>
-  <component type="summary-block">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>
-  <component type="custom" region="middle_column">![svg](data:image/svg+xml;base64,PHN2ZyDigKYgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPuKApjwvc3ZnPg==)</component>  
+  <component type="title"><svg viewBox="0 0 1000 22" width="1000" height="22"><text x="0" y="18" font-size="18" font-weight="bold" fill="#333">P-TIOX</text></svg></component>
+  <component type="formula-ref"><svg viewBox="0 0 1000 14" width="1000" height="14"><text x="0" y="11" font-size="11" fill="#c8860d">774715 21 vs Comp-A</text></svg></component>
+  <component type="meta"><svg viewBox="0 0 900 24" width="900" height="24"><text x="0" y="18" font-size="12" fill="#333">DEV · audience · Claims: ...</text></svg></component>
+  <component type="info-card" label="Formulation"><svg viewBox="0 0 380 120" width="380" height="120">...</svg></component>
+  <component type="efficacy-table"><svg viewBox="0 0 900 240" width="900" height="240">...</svg></component>
+  <component type="consumer-block"><svg viewBox="0 0 900 160" width="900" height="160">...</svg></component>
+  <component type="summary-block"><svg viewBox="0 0 380 200" width="380" height="200">...</svg></component>
+  <component type="custom" region="middle_column"><svg viewBox="0 0 900 120" width="900" height="120">...</svg></component>
 </deck>
 ```
 
 **Component → region routing** (engine-enforced; you only choose `type`). `type` is the primary key — use it to route, then pull the per-field generation rules from the YAML **Field Output Map** below.
 
-| `type`                 | region        | content (from JSON)                                                               | Field detail                                                                |
-| ---------------------- | ------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `title`                | top_banner    | `project_info.project_name`                                                       | `PROJECT_INFO` → `project_name`                                                     |
-| `formula-ref`          | top_banner    | `target_formula` + `comparator_formulas`                                          | `PROJECT_INFO` → `target_formula`, `comparator_formulas`                            |
-| `meta`                 | meta_row      | `project_type` + `target_audience` + `communication_claims`                       | `PROJECT_INFO` → `project_type`, `target_audience` · `PROJECT_DETAIL` → `communication_claims` |
+| `type`                   | region        | content (from JSON)                                                               | Field detail                                                                                                       |
+| -------------------------- | ------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `title`                  | top_banner    | `project_info.project_name`                                                     | `PROJECT_INFO` → `project_name`                                                                               |
+| `formula-ref`            | top_banner    | `target_formula` + `comparator_formulas`                                      | `PROJECT_INFO` → `target_formula`, `comparator_formulas`                                                    |
+| `meta`                   | meta_row      | `project_type` + `target_audience` + `communication_claims`                 | `PROJECT_INFO` → `project_type`, `target_audience` · `PROJECT_DETAIL` → `communication_claims`        |
 | `info-card` (`label=`) | left_column   | one card per field: Formulation / Fragrance / Packaging / Sustainability / Safety | `PROJECT_DETAIL` → `formulation_info`, `fragrance_info`, `packaging_info`, `sustainability`, `safety` |
-| `efficacy-table`       | middle_column | one per CLINS/FE study, **all** metrics                                           | `CONVICTION_PERFORMANCE` → `measured_efficacy`                                      |
-| `consumer-block`       | middle_column | CONSUMER_PERFORMANCE                                                               | `CONSUMER_PERCEPTION`                                                               |
-| `summary-block`        | right_column  | `performance_summary` (AI-authored)                                              | `PROJECT_DETAIL` → `performance_summary`                                           |
-| `custom` (`region=`)   | escape hatch  | anything that does not fit the above                                              | —                                                                                   |
+| `efficacy-table`         | middle_column | one per CLINS/FE study,**all** metrics                                      | `CONVICTION_PERFORMANCE` → `measured_efficacy`                                                                |
+| `consumer-block`         | middle_column | CONSUMER_PERFORMANCE                                                              | `CONSUMER_PERCEPTION`                                                                                            |
+| `summary-block`          | right_column  | `performance_summary` (AI-authored)                                             | `PROJECT_DETAIL` → `performance_summary`                                                                      |
+| `custom` (`region=`)   | escape hatch  | anything that does not fit the above                                              | —                                                                                                                 |
+
+### Component cardinality (how many components to emit per `type`)
+
+Each `<component>` carries exactly ONE `<svg>` (see SVG authoring rules). Beyond that, emit the right NUMBER of components per `type` — the engine stacks and paginates them; it does NOT merge or split them for you.
+
+| `type` | # components | rule |
+| --- | --- | --- |
+| `title` | **exactly 1** | the project name |
+| `formula-ref` | **exactly 1** | target formula + comparator(s) |
+| `meta` | **exactly 1** | audience + claims + project type merged |
+| `info-card` | **1 per `label`** | 5 cards: Formulation / Fragrance / Packaging / Sustainability / Safety |
+| `summary-block` | **exactly 1** | right-column summary |
+| `efficacy-table` | **1 per study/report** | N studies ⇒ N components; if one study is very long, split it into further `efficacy-table` components (e.g. `Study A (1/2)`, `Study A (2/2)`) |
+| `consumer-block` | **1 per consumer-perception test** | N tests ⇒ N components |
+| `custom` | escape hatch | only when no `type` fits |
+
+> **Measured efficacy = multiple components, never one giant SVG.** Each CLINS/FE study is a SEPARATE `efficacy-table` component (one `<svg>` each). The engine paginates the middle column automatically. Merging several studies into a single component/svg will clip and lose data.
 
 ### Field Output Map (field_schema)
 
@@ -303,7 +315,9 @@ field_schema:
 
 ### SVG authoring rules (CRITICAL — the renderer is PyMuPDF)
 
-Each `<component>` contains exactly one `<svg>`. The renderer rasterizes SVG via PyMuPDF, so:
+**Exactly one `<svg>` per `<component>` — non-negotiable.** Every `<component>` wraps ONE and ONLY ONE `<svg>...</svg>`. Never zero (the deck is rejected with a "must contain exactly one `<svg>`" error), never two-or-more (the engine keeps only the first and silently drops the rest). Put no plain text, markdown, or whitespace outside the `<svg>` inside a component.
+
+The renderer rasterizes SVG via PyMuPDF, so:
 
 1. **Always set `viewBox`** (and matching `width`/`height`). The engine derives the component's aspect ratio from `viewBox` (fallback `width`/`height`) and scales it to the column width — your SVG's height/width ratio decides how much vertical space it occupies and whether it spills to a continuation page.
 2. **Inline attributes only.** Put `fill`, `stroke`, `font-size`, `font-weight`, `font-family`, `text-anchor` directly on elements. **No `<style>` blocks, no `class=`, no CSS selectors, no `foreignObject`, no external `<image>`/URLs** — the rasterizer ignores or strips them.
@@ -311,8 +325,9 @@ Each `<component>` contains exactly one `<svg>`. The renderer rasterizes SVG via
 4. **Font:** `font-family="Arial, sans-serif"`. Avoid exotic fonts (the renderer may substitute).
 5. **Colors:** hex only. Status palette: green `#2e7d32`, orange `#e07b00`, red `#c62828`, neutral `#333333`. AI-original insight only: cyan `#00bcd4`.
 6. **Multi-line text:** stack multiple `<text>` elements (one line each) or use `<tspan>`.
-7. **Height budget** (at the component's column width): middle / left / right ≈ 380 px, top_banner ≈ 54 px, meta_row ≈ 28 px. A single component taller than its budget is **not** auto-split by the engine — it overflows and is clipped. If a study's table exceeds the middle budget, **split it into multiple `efficacy-table` components** (e.g. `Study A (1/2)`, `Study A (2/2)`); the engine then paginates them across continuation pages (repeating banner / left / right).
+7. **Height budget** (at the component's column width): middle / left / right ≈ 380 px, top_banner ≈ 54 px, meta_row ≈ 28 px. A single component taller than its budget is **not** auto-split by the engine — it overflows and is clipped. If a study's table exceeds the middle budget, **split it into multiple `efficacy-table` components** (e.g. `Study A (1/2)`, `Study A (2/2)`); the engine then paginates them across continuation pages (repeating banner / left / right). **top_banner (≈54 px) must hold BOTH `title` and `formula-ref`** — keep both svgs very flat: their viewBox height/width ratios must sum to ≤ ~0.047 (e.g. title `1000×22` + formula-ref `1000×14`). Otherwise the deck hard-fails with a `Repeat region 'top_banner' overflows page 1` LayoutError.
 8. **All visible text in English** (numbers / symbols as-is). Render `N/A` when a field is absent in the JSON; never fabricate.
+9. **No markdown code fences.** Output the raw `<deck>` XML only — no ` ```xml ` / ` ``` ` fences around the deck or around individual components, and no prose before or after. A fence around a component puts extra text outside the `<svg>` and breaks the one-`<svg>` rule.
 
 ### Constraints
 

@@ -40,6 +40,8 @@ from .classifier import Classifier
 from .converter import _is_junk_filename
 from .logger import get_logger
 from .pipeline import DossierPipeline
+from .pdf_parser import pdf_has_text
+from .ocr import ocr_ensure_text
 
 logger = get_logger("orchestrator")
 
@@ -176,6 +178,38 @@ def run_project_pipeline(
     ]
     add_event(f"[{project_name}] scan: {len(top_level)} unclassified file(s) at top level")
 
+    # Detect scanned / image-only PDFs (no text layer) and run the OCR pre-pass
+    # so they gain a real text layer before classify/ingest. Files that already
+    # have text are returned unchanged.
+    image_only = [
+        name for name in top_level
+        if name.lower().endswith(".pdf") and not pdf_has_text(folder / name)
+    ]
+    ocr_failed: list[str] = []
+    if image_only:
+        add_event(
+            f"[{project_name}] {len(image_only)} scanned/image-only PDF(s) with no "
+            f"text layer — running OCR pre-pass: {', '.join(image_only)}",
+            "warn",
+        )
+        for name in image_only:
+            try:
+                ocr_path = ocr_ensure_text(folder / name)
+                if Path(ocr_path).resolve() != (folder / name).resolve():
+                    shutil.copy2(ocr_path, folder / name)
+                    add_event(
+                        f"[{project_name}] OCR applied to {name} "
+                        f"(text layer synthesized)",
+                        "info",
+                    )
+            except Exception as e:
+                ocr_failed.append(name)
+                logger.exception(f"OCR pre-pass failed for {name}")
+                add_event(
+                    f"[{project_name}] OCR FAILED for {name}: {e}",
+                    "error",
+                )
+
     # -- 2) classify (auto-accept predicted types) ---------------------------
     stage("classify")
     classifier = Classifier(base_dir=folder)
@@ -190,8 +224,9 @@ def run_project_pipeline(
     unknown = [r["filename"] for r in results if r["report_type"] not in REPORT_TYPES]
     add_event(
         f"[{project_name}] classify: {len(results)} file(s) "
-        f"({len(moved)} moved, {len(unknown)} UNKNOWN left in place)",
-        "warn" if unknown else "info",
+        f"({len(moved)} assigned to CLINS/FE/CE, {len(unknown)} UNKNOWN "
+        f"— still indexed & denoised)",
+        "info",
     )
     for u in unprocessed:
         add_event(f"[{project_name}] skipped: {u['filename']} ({u['reason']})", "warn")
@@ -200,9 +235,30 @@ def run_project_pipeline(
     stage("ingest")
     pipeline = DossierPipeline(project_name)
     pipeline.init()
-    n_pages = pipeline.ingest()
+    # ingest reads classified PDFs from the SAME folder scan/classify used
+    # (retrieved/<name>/ for the retrieval flow, not project_data_dir which is a
+    # different path). Without base_dir, ingest looks in the wrong place and
+    # indexes 0 pages.
+    n_pages = pipeline.ingest(base_dir=folder)
     add_event(f"[{project_name}] ingest: {n_pages} page(s) indexed")
     if n_pages == 0:
+        if ocr_failed:
+            raise RuntimeError(
+                f"No pages ingested for '{project_name}': "
+                f"{len(ocr_failed)} scanned/image-only file(s) could not be "
+                f"OCR'd ({', '.join(ocr_failed)}). Install/repair easyocr "
+                f"(pip install easyocr) or check the scan quality."
+            )
+        if image_only:
+            # Scanned PDFs with no usable text layer — OCR was skipped
+            # (disabled) or ran but produced nothing.
+            raise RuntimeError(
+                f"No pages ingested for '{project_name}': "
+                f"{len(image_only)} scanned/image-only file(s) have no "
+                f"extractable text layer ({', '.join(image_only)}). The "
+                f"pipeline needs OCR for these — enable/repair easyocr "
+                f"(pip install easyocr) or drop them from the retrieval."
+            )
         raise RuntimeError(
             f"No pages ingested for '{project_name}' — nothing to package"
         )

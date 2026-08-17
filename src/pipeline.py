@@ -10,7 +10,7 @@ Condense:  discover the denoised page set via the lexical retriever, then write
            accepts multiple files but rejects any single file over 50 MB.
 """
 
-import fitz  # PyMuPDF
+import pymupdf as fitz  # PyMuPDF
 import shutil
 from pathlib import Path
 from typing import Optional

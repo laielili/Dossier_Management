@@ -381,7 +381,13 @@ class LexicalRetriever(Retriever):
             cap = None
 
         results: list[dict] = []
-        for rt in REPORT_TYPES:
+        # Process every report type actually present in the index — including
+        # UNKNOWN (files the classifier could not confidently assign to
+        # CLINS/FE/CE). UNKNOWN pages still get noise removal; they just aren't
+        # attributed to a typed group. Grouping by the page's real report_type
+        # keeps the cross-page boilerplate pass correct.
+        distinct_rts = sorted({p["report_type"] for p in pages})
+        for rt in distinct_rts:
             candidates = [p for p in pages if p["report_type"] == rt]
             if not candidates:
                 continue

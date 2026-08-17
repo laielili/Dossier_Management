@@ -23,7 +23,9 @@ pydantic>=2.7.0
 # Office license already owned. Requires Windows + interactive desktop session.
 comtypes>=1.1.0
 
-# --- OCR enhancement (optional: on-image text extraction) ---
-# Uncomment the following lines if OCR is needed:
-# paddleocr>=2.8.0
-# paddlepaddle>=3.0.0
+# --- OCR pre-pass (scanned / image-only PDFs) ---
+# Scanned PDFs have no text layer, so the classify/ingest/denoise stages cannot
+# read them. The pipeline OCRs such PDFs with easyocr to synthesize a text
+# layer. The heavy engine (torch) is already provided by the project venv; this
+# pulls the remaining deps (torchvision, opencv, etc.).
+easyocr>=1.7.0
