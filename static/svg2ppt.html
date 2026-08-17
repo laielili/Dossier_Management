@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SVG &rarr; PPTX — Dossier Management</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/style.css?v=1">
+<style>
+  .preview-strip { display:flex; flex-direction:column; gap:14px; max-height:72vh; overflow:auto; padding:4px; }
+  .preview-page { text-align:center; }
+  .preview-page .page-cap { font-size:12px; color:#777; margin:4px 0 2px; }
+  .preview-page img { width:100%; max-width:1000px; height:auto; border:1px solid #d9a441; display:block; margin:0 auto; background:#fff; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <p class="eyebrow">Deck Conversion Utility</p>
+    <h1>SVG &rarr; PPTX</h1>
+    <p class="subtitle">Paste AI-generated SVG components, get a 5-region PowerPoint deck</p>
+    <nav class="page-nav">
+      <a class="btn btn-sm btn-outline" href="/"
+        title="Back to the document pipeline">&lsaquo;&nbsp; Back to Pipeline</a>
+      <a class="btn btn-sm btn-outline" href="/html2pptx"
+        title="The legacy browser-based HTML converter">HTML &rarr; PPTX</a>
+    </nav>
+  </header>
+
+  <!-- ============ Deck XML ============ -->
+  <section class="card convert-card">
+    <div class="card-head">
+      <h2>Deck XML</h2>
+    </div>
+    <p class="hint">
+      Paste the <strong>deck XML</strong> produced by the downstream AI. Each
+      <code>&lt;component type="..."&gt;</code> wraps one content-only
+      <code>&lt;svg&gt;</code>; the server routes it into a region and lays out the
+      whole page. Markdown code fences (<code>```xml</code>) are stripped automatically.
+    </p>
+
+    <textarea id="xml-input" class="code-input" spellcheck="false"
+      placeholder="&lt;?xml version=&quot;1.0&quot;?&gt;&#10;&lt;deck project=&quot;P-TIOX&quot;&gt;&#10;  &lt;component type=&quot;title&quot;&gt;&lt;svg viewBox=&quot;0 0 800 40&quot;&gt;…&lt;/svg&gt;&lt;/component&gt;&#10;  …&#10;&lt;/deck&gt;"></textarea>
+
+    <div class="code-toolbar">
+      <span class="code-stat" id="code-stat">0 characters</span>
+      <span class="code-toolbar-spacer"></span>
+      <button class="btn btn-sm btn-outline" id="btn-paste" type="button"
+        title="Paste from clipboard">Paste</button>
+      <button class="btn btn-sm btn-outline" id="btn-sample" type="button"
+        title="Load a small sample deck so you can verify the pipeline">Sample</button>
+      <button class="btn btn-sm btn-outline" id="btn-clear" type="button"
+        title="Clear the editor">Clear</button>
+    </div>
+  </section>
+
+  <!-- ============ Options ============ -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Options</h2>
+    </div>
+
+    <div class="form-row">
+      <label for="max-pages">Max pages</label>
+      <div class="folder-input-group">
+        <input type="range" id="max-pages" min="0" max="20" value="0" step="1">
+        <span class="param-status" id="max-pages-val">0 (auto)</span>
+      </div>
+    </div>
+    <p class="hint param-hint"><strong>0 = no cap</strong> (add pages, full fidelity). A positive value is a <strong>hard cap</strong>: the engine compresses the overflow column &mdash; font-size, vertical spacing, inter-card gap and intra-card horizontal whitespace &mdash; until the deck fits. The density factor is near-unbounded (floor 0.15), so readability is sacrificed when needed to honor the cap.</p>
+
+    <div class="form-row">
+      <label for="dpi">Render DPI</label>
+      <input type="number" id="dpi" value="150" min="72" max="300">
+    </div>
+
+    <div class="form-row">
+      <label for="file-name">File name</label>
+      <div class="folder-input-group">
+        <input type="text" id="file-name" value="synthesis_deck" autocomplete="off">
+        <span class="suffix-tag">.pptx</span>
+      </div>
+    </div>
+
+    <div class="button-row" style="margin-top:14px;">
+      <button class="btn btn-accent btn-run-all" id="btn-build" type="button"
+        title="Build the deck and write the .pptx">&#9654;&nbsp; Build Deck</button>
+    </div>
+  </section>
+
+  <!-- ============ Result ============ -->
+  <section class="card hidden" id="result-card">
+    <div class="card-head">
+      <h2>Result</h2>
+    </div>
+    <p class="success" id="result-text"></p>
+    <div class="prep-actions">
+      <a class="btn btn-primary" id="btn-download" href="#" download>Download PPTX</a>
+      <button class="btn btn-outline" id="btn-preview" type="button">Preview</button>
+    </div>
+    <p class="muted" id="result-meta"></p>
+    <div id="result-warnings" class="warnings hidden"></div>
+  </section>
+
+  <!-- ============ Inline Preview ============ -->
+  <section class="card hidden" id="preview-card">
+    <div class="card-head">
+      <h2>Preview</h2>
+      <button class="btn btn-sm btn-outline" id="btn-preview-hide" type="button">Hide</button>
+    </div>
+    <div class="preview-strip" id="preview-strip"></div>
+  </section>
+
+  <!-- Log -->
+  <section class="card">
+    <h2>Log</h2>
+    <pre id="log-area" class="log"></pre>
+  </section>
+
+</div>
+
+<script src="/static/svg2ppt-app.js?v=1"></script>
+
+</body>
+</html>

@@ -9,13 +9,17 @@ from pathlib import Path
 # --- Project root ---
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# --- User-configured watch folder (base dir for projects) ---------------
-# Persisted to listen_folder.txt at the project root. When set, per-project
-# folders are resolved as <listen_folder>/<project_name>/ instead of
-# PROJECT_ROOT/<project_name>/. Lets the user point the app at any folder
-# (e.g. an OneDrive-synced dossier library) without moving files. The path
-# is intentionally NOT written to logs.
-LISTEN_FOLDER_FILE = PROJECT_ROOT / "listen_folder.txt"
+# --- Search target paths (Dossier retrieval feature) -------------------
+# Persisted to search_paths.txt at the project root (one absolute path per
+# line, most-recent first). This is a convenience history the search UI renders
+# as a re-loadable / deletable list of folders to look inside for dossiers. The
+# path is intentionally NOT written to logs.
+SEARCH_PATHS_FILE = PROJECT_ROOT / "search_paths.txt"
+
+# Folder that receives the files a user selects in the retrieval flow,
+# structured as retrieved/<project_name>/ (one subfolder per retrieval run).
+# Created on demand when a retrieval starts.
+RETRIEVED_DIR = PROJECT_ROOT / "retrieved"
 
 # --- Data & output directories ---
 DATA_DIR = PROJECT_ROOT / "data"
@@ -31,19 +35,13 @@ CLASSIFY_PROFILE_DIR = PROJECT_ROOT / "classify"
 REPORT_TYPES = ["CLINS", "FE", "CE"]
 
 
-def _read_listen_folders() -> list[str]:
-    """Read all saved listen folders as an ordered, de-duplicated list.
-
-    Stored one absolute path per line in listen_folder.txt. The first entry
-    is the *active* folder (used as the base dir for projects). The full
-    ordered list is the user-visible history shown in the folder picker so
-    the user can re-pick or delete past choices.
-    """
-    if not LISTEN_FOLDER_FILE.exists():
+def get_search_paths() -> list[str]:
+    """Return the full ordered list of saved search target paths (history)."""
+    if not SEARCH_PATHS_FILE.exists():
         return []
     out: list[str] = []
     seen: set[str] = set()
-    for line in LISTEN_FOLDER_FILE.read_text(encoding="utf-8").splitlines():
+    for line in SEARCH_PATHS_FILE.read_text(encoding="utf-8").splitlines():
         p = line.strip()
         if not p:
             continue
@@ -54,44 +52,28 @@ def _read_listen_folders() -> list[str]:
     return out
 
 
-def get_listen_folders() -> list[str]:
-    """Return the full ordered list of saved listen folders (history)."""
-    return _read_listen_folders()
-
-
-def get_listen_folder() -> str | None:
-    """Return the active (first) saved listen folder, or None if unset.
-
-    The active folder is the base directory under which per-project folders
-    (<project_name>/) live.
-    """
-    folders = _read_listen_folders()
-    return folders[0] if folders else None
-
-
-def set_listen_folder(path: str) -> None:
-    """Add / activate a listen folder in the history list.
+def set_search_path(path: str) -> None:
+    """Add / activate a search target path in the history list.
 
     De-duplicates and moves the path to the front of the list, then persists.
-    The front entry becomes the active folder used for project resolution.
     Re-saving the same path only re-orders it — it never creates a duplicate.
     """
     p = str(Path(path).expanduser()).strip()
     if not p:
         return
-    folders = [f for f in _read_listen_folders() if f != p]
+    folders = [f for f in get_search_paths() if f != p]
     folders.insert(0, p)
-    LISTEN_FOLDER_FILE.write_text("\n".join(folders) + "\n", encoding="utf-8")
+    SEARCH_PATHS_FILE.write_text("\n".join(folders) + "\n", encoding="utf-8")
 
 
-def delete_listen_folder(path: str) -> bool:
-    """Remove one saved folder from the history list. Returns True if removed."""
+def delete_search_path(path: str) -> bool:
+    """Remove one saved search target path from the history list."""
     p = str(Path(path).expanduser()).strip()
-    folders = _read_listen_folders()
+    folders = get_search_paths()
     if p not in folders:
         return False
     folders = [f for f in folders if f != p]
-    LISTEN_FOLDER_FILE.write_text(
+    SEARCH_PATHS_FILE.write_text(
         ("\n".join(folders) + "\n") if folders else "", encoding="utf-8"
     )
     return True
@@ -100,16 +82,11 @@ def delete_listen_folder(path: str) -> bool:
 def project_data_dir(project_name: str) -> Path:
     """Per-project dossier working folder.
 
-    The base is the user-configured listen folder (listen_folder.txt) when
-    set, otherwise the app root (PROJECT_ROOT). The project folder is
-    <base>/<project_name>/, and classified files go into
-    <project_name>/{CLINS,FE,CE}/ beneath it. The project name doubles as
-    the pipeline ``project_id`` (index key + output PDF name), so this single
-    mapping drives the whole per-project flow.
+    The project folder is <PROJECT_ROOT>/<project_name>/, and classified files
+    go into <project_name>/{CLINS,FE,CE}/ beneath it. The project name doubles
+    as the pipeline ``project_id`` (index key + output PDF name), so this
+    single mapping drives the whole per-project flow.
     """
-    base = get_listen_folder()
-    if base:
-        return Path(base) / project_name
     return PROJECT_ROOT / project_name
 
 # Friendly labels for the synthesis PDF annotation block (user-defined mapping:
@@ -169,8 +146,8 @@ VETO_MIN_UNIQUE_CHARS = 10    # pure-template boilerplate (fewer unique chars) N
 VETO_SEED_TERMS = ["conclusion", "results", "p-value", "significance"]
 
 # --- User-tunable overrides (persisted to disk) --
-# The frontend writes pipeline parameters here (e.g. the listen folder). The
-# noise-deletion policy itself is code-defined and not user-tunable.
+# The frontend writes pipeline parameters here (e.g. the PPTX output folder).
+# The noise-deletion policy itself is code-defined and not user-tunable.
 CONFIG_OVERRIDES_PATH = PROJECT_ROOT / "config_overrides.json"
 
 

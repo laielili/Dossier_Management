@@ -1,28 +1,23 @@
 """
-Pipeline orchestrator — one-click full workflow + auto-watch.
+Pipeline orchestrator — per-project dossier pipeline + retrieval flow.
 
-Two entry points, both driving the same per-project pipeline chain:
-
-  1) run_all_start()   — manual trigger: process every eligible project
-                         folder under the active listen folder.
-  2) Watcher           — background thread: when enabled, polls the listen
-                         folder and auto-processes any NEW project folder
-                         dropped into it (excluding /Dossier_condensed).
+Entry point (used by the retrieval UI):
+  retrieve_start()  — copy selected source files into retrieved/<name>/ and
+                      run the full per-project chain on that cache folder.
 
 Per-project chain (all stages, in order):
     scan -> classify -> ingest -> condense
 
 Condense denoises every source dossier (drops noise pages) and writes a
 cleaned copy into
-    <listen_folder>/Dossier_condensed/<project>/
+    <PROJECT_ROOT>/Dossier_condensed/<project>/
 
-Concurrency: a single global processing lock serializes pipeline work so a
-manual run and a watcher-triggered run can never process concurrently (COM
-conversion and the index are not concurrency-safe).
+Concurrency: a single global processing lock serializes pipeline work (COM
+conversion and the index are not concurrency-safe), so a retrieval run and any
+other pipeline pass never overlap.
 
 All progress is appended to an in-memory activity feed the frontend polls
-(GET /activity). Listen-folder paths are intentionally NEVER logged to the
-server log files; the activity feed shows project names only.
+(GET /activity). Project names only are shown in the feed.
 """
 
 import os
@@ -33,10 +28,12 @@ import threading
 import time
 from collections import deque
 from pathlib import Path
+from typing import Optional
 
 from .config import (
+    PROJECT_ROOT,
     REPORT_TYPES,
-    get_listen_folder,
+    RETRIEVED_DIR,
     project_data_dir,
 )
 from .classifier import Classifier
@@ -46,15 +43,15 @@ from .pipeline import DossierPipeline
 
 logger = get_logger("orchestrator")
 
-# Folder (under the listen folder) that receives finished PDFs. Excluded
-# from scanning and watching.
+# Folder (under PROJECT_ROOT) that receives finished PDFs. Excluded from
+# scanning.
 CONDENSED_DIR_NAME = "Dossier_condensed"
 
 DOSSIER_EXTS = (".pdf", ".pptx", ".docx")
 
 STAGES = ["scan", "classify", "ingest", "condense"]
 
-# One pipeline at a time — manual run and watcher share this lock.
+# One pipeline at a time — pipeline passes share this lock.
 _processing_lock = threading.Lock()
 
 
@@ -62,31 +59,36 @@ _processing_lock = threading.Lock()
 # Reveal output folder in the native file manager
 # ---------------------------------------------------------------------------
 
-def open_condensed_folder(project_name: str | None = None) -> None:
-    """Open the OS file explorer at the condensed output folder.
+def open_condensed_folder(
+    project_name: str | None = None,
+    explicit_path: str | None = None,
+) -> None:
+    """Open the OS file explorer at the deliverable folder.
 
-    When ``project_name`` is given, reveals the per-project deliverable folder
-    <listen>/Dossier_condensed/<project_name>/ (the popup after a single
-    project finishes). When omitted, reveals the parent Dossier_condensed/
-    folder (used after a multi-project run-all, which produces many subfolders).
+    Prefer ``explicit_path`` when given (the retrieval flow uses it to reveal
+    ``retrieved/<name>/AI_FEED_DRAG_INTO_GPT`` — the folder the user drags into
+    the downstream AI client). Otherwise fall back to the legacy layout:
+    <PROJECT_ROOT>/Dossier_condensed/<project_name>/ (or the parent folder when
+    ``project_name`` is omitted).
 
-    Triggered when Auto-Watch is switched on and after a pipeline run finishes
-    (manual run-all and watcher auto-processing). Best-effort: any failure
-    (headless server, no display session) is logged and swallowed so it never
-    breaks the pipeline. The folder is created if it does not exist yet.
+    Triggered after a pipeline run finishes (retrieval preprocess). Best-effort:
+    any failure (headless server, no display session) is logged and swallowed
+    so it never breaks the pipeline. The folder is created if it does not exist
+    yet.
     """
-    base = get_listen_folder()
-    if not base:
-        return
-    condensed = Path(base) / CONDENSED_DIR_NAME
-    target = condensed / project_name if project_name else condensed
+    if explicit_path:
+        target = Path(explicit_path)
+        label = explicit_path
+    else:
+        condensed = PROJECT_ROOT / CONDENSED_DIR_NAME
+        target = condensed / project_name if project_name else condensed
+        label = f"{CONDENSED_DIR_NAME}/{project_name}" if project_name else CONDENSED_DIR_NAME
     try:
         target.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         logger.warning(f"open_condensed_folder: cannot create {target}: {e}")
         return
     _open_in_explorer(target)
-    label = f"{CONDENSED_DIR_NAME}/{project_name}" if project_name else CONDENSED_DIR_NAME
     add_event(f"Opened file explorer at {label}/", "success")
 
 
@@ -135,65 +137,33 @@ def get_events(since: int = 0) -> dict:
     return {"events": out, "last_id": last}
 
 
-# ---------------------------------------------------------------------------
-# Project folder discovery
-# ---------------------------------------------------------------------------
 
-def _has_dossier_files(folder: Path) -> bool:
-    """True if the folder holds dossier files (top level or in type subdirs)."""
-    try:
-        for p in folder.iterdir():
-            if p.is_file() and p.suffix.lower() in DOSSIER_EXTS \
-                    and not _is_junk_filename(p.name):
-                return True
-        for rt in REPORT_TYPES:
-            sub = folder / rt
-            if sub.is_dir():
-                for p in sub.iterdir():
-                    if p.is_file() and p.suffix.lower() == ".pdf" \
-                            and not _is_junk_filename(p.name):
-                        return True
-    except OSError:
-        pass
-    return False
-
-
-def list_project_folders(base: Path) -> list[str]:
-    """Eligible project folder names under the listen folder.
-
-    Excludes /Dossier_condensed, hidden/system folders, and folders that
-    contain no dossier files at all.
-    """
-    names: list[str] = []
-    if not base.exists():
-        return names
-    for p in sorted(base.iterdir()):
-        if not p.is_dir():
-            continue
-        if p.name == CONDENSED_DIR_NAME:
-            continue
-        if p.name.startswith(".") or p.name.startswith("~"):
-            continue
-        if _has_dossier_files(p):
-            names.append(p.name)
-    return names
-
-
-# ---------------------------------------------------------------------------
-# Per-project pipeline chain
-# ---------------------------------------------------------------------------
-
-def run_project_pipeline(project_name: str, stage_cb=None) -> dict:
+def run_project_pipeline(
+    project_name: str,
+    stage_cb=None,
+    folder: Optional[Path] = None,
+    condense_dir: Optional[Path] = None,
+) -> dict:
     """Run the full chain for ONE project folder. Returns a result dict.
 
     stage_cb(stage_name) is called as each stage begins (for the frontend
     stage tracker). Caller must hold / respect the processing lock.
+
+    ``folder`` overrides the resolved project folder (defaults to
+    ``project_data_dir(project_name)``). The retrieval flow passes the
+    ``retrieved/<name>/`` cache folder here so the pipeline runs on the
+    copied files rather than the live source tree.
+
+    ``condense_dir`` overrides where denoised per-document PDFs are written
+    (defaults to ``<PROJECT_ROOT>/Dossier_condensed/<project_name>/``). The
+    retrieval flow points this at ``retrieved/<name>/AI_FEED_DRAG_INTO_GPT``
+    so the deliverable is one drag-in folder away from the downstream AI client.
     """
     def stage(name: str):
         if stage_cb:
             stage_cb(name)
 
-    folder = project_data_dir(project_name)
+    folder = Path(folder) if folder is not None else project_data_dir(project_name)
     if not folder.exists():
         raise FileNotFoundError(f"Project folder not found: {project_name}")
 
@@ -239,17 +209,15 @@ def run_project_pipeline(project_name: str, stage_cb=None) -> dict:
 
     # -- 4) condense: denoise + write cleaned per-doc PDFs --------------------
     stage("condense")
-    base = get_listen_folder()
-    if not base:
-        raise RuntimeError("No listen folder configured — cannot export")
-    condensed = Path(base) / CONDENSED_DIR_NAME
-    condensed.mkdir(parents=True, exist_ok=True)
-    project_out = condensed / project_name
+    if condense_dir is not None:
+        project_out = Path(condense_dir)
+    else:
+        project_out = PROJECT_ROOT / CONDENSED_DIR_NAME / project_name
     result = pipeline.condense(output_dir=project_out)
     add_event(
         f"[{project_name}] condense: {result['sources_processed']} source(s), "
         f"{result['pages_dropped']} noise page(s) dropped -> "
-        f"{CONDENSED_DIR_NAME}/{project_name}/",
+        f"{project_out}/",
         "success",
     )
 
@@ -264,250 +232,146 @@ def run_project_pipeline(project_name: str, stage_cb=None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Manual one-click run (all projects), background job
+# Retrieval flow — search -> select -> copy into retrieved/<name>/ -> pipeline
 # ---------------------------------------------------------------------------
 
-_job_lock = threading.Lock()
-_job: dict = {
+_retrieve_lock = threading.Lock()
+_retrieve_job: dict = {
     "running": False,
-    "projects": [],          # ordered project names in this run
-    "current_project": None,
-    "current_stage": None,   # one of STAGES
-    "done": [],              # finished project names
-    "results": [],
-    "errors": [],            # [{project, error}]
     "finished": True,
+    "project_name": None,
+    "current_stage": None,
+    "result": None,
+    "error": None,
 }
 
 
-def run_all_status() -> dict:
-    with _job_lock:
-        return dict(_job)
+def retrieve_status() -> dict:
+    with _retrieve_lock:
+        return dict(_retrieve_job)
 
 
-def _set_job(**kw) -> None:
-    with _job_lock:
-        _job.update(kw)
+def _set_retrieve(**kw) -> None:
+    with _retrieve_lock:
+        _retrieve_job.update(kw)
 
 
-def _run_all_worker() -> None:
-    base = get_listen_folder()
-    if not base:
-        add_event("Run aborted: no listen folder configured", "error")
-        _set_job(running=False, finished=True)
-        return
-    projects = list_project_folders(Path(base))
-    _set_job(projects=projects, done=[], results=[], errors=[])
-    if not projects:
-        add_event("No eligible project folders found in the listen folder", "warn")
-        _set_job(running=False, finished=True,
-                 current_project=None, current_stage=None)
-        return
+def _copy_selected(files: list[str], dest_dir: Path) -> list[str]:
+    """Copy the user-selected source files into ``dest_dir``.
 
-    add_event(
-        f"Full pipeline started for {len(projects)} project(s): "
-        + ", ".join(projects)
-    )
-    with _processing_lock:
-        for name in projects:
-            _set_job(current_project=name, current_stage="scan")
-            try:
-                res = run_project_pipeline(
-                    name,
-                    stage_cb=lambda s: _set_job(current_stage=s),
-                )
-                with _job_lock:
-                    _job["results"].append(res)
-                    _job["done"].append(name)
-            except Exception as e:  # keep going with remaining projects
-                logger.exception(f"Pipeline failed for project '{name}'")
-                add_event(f"[{name}] FAILED: {e}", "error")
-                with _job_lock:
-                    _job["errors"].append({"project": name, "error": str(e)})
-                    _job["done"].append(name)
-
-    ok = len(_job["results"])
-    bad = len(_job["errors"])
-    add_event(
-        f"Full pipeline finished: {ok} succeeded, {bad} failed. "
-        f"PDFs in {CONDENSED_DIR_NAME}/",
-        "success" if bad == 0 else "warn",
-    )
-    # Reveal the output folder so the user can drag the finished (denoised)
-    # files into a downstream AI client. For a run-all we open the parent
-    # Dossier_condensed/ (it now holds one subfolder per project).
-    open_condensed_folder()
-    _set_job(running=False, finished=True,
-             current_project=None, current_stage=None)
-
-
-def run_all_start() -> dict:
-    """Start the one-click run in a background thread (if idle)."""
-    with _job_lock:
-        if _job["running"]:
-            return {"ok": False, "detail": "A run is already in progress"}
-        _job.update(
-            running=True, finished=False,
-            projects=[], done=[], results=[], errors=[],
-            current_project=None, current_stage=None,
-        )
-    t = threading.Thread(target=_run_all_worker, name="run-all", daemon=True)
-    t.start()
-    return {"ok": True, "started": True}
-
-
-# ---------------------------------------------------------------------------
-# Auto-watch (background polling thread)
-# ---------------------------------------------------------------------------
-
-WATCH_POLL_SECONDS = 5        # listen-folder poll interval
-STABLE_CHECK_SECONDS = 4      # gap between stability snapshots
-STABLE_CHECKS_REQUIRED = 2    # consecutive identical snapshots => stable
-
-
-def _folder_snapshot(folder: Path) -> tuple:
-    """(file count, total bytes) over the whole subtree — copy-progress probe."""
-    count = 0
-    total = 0
-    try:
-        for p in folder.rglob("*"):
-            if p.is_file():
-                count += 1
-                try:
-                    total += p.stat().st_size
-                except OSError:
-                    pass
-    except OSError:
-        pass
-    return (count, total)
-
-
-class Watcher:
-    """Polls the listen folder; auto-runs the pipeline on NEW project folders.
-
-    - Folders existing when the watch is enabled are treated as known (not
-      auto-processed) — only folders that APPEAR while watching trigger runs.
-    - /Dossier_condensed is always excluded.
-    - A new folder is processed only after its contents stop changing
-      (stability probe), so half-copied uploads are never ingested.
+    Collision-safe: if two selected files share a base name (e.g. they came
+    from different subfolders of the search target), the later one is suffixed
+    ``name_2.ext`` so nothing is overwritten. Returns the list of copied paths.
     """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    copied: list[str] = []
+    for src in files:
+        s = Path(src)
+        if not s.exists() or not s.is_file():
+            add_event(f"retrieve: skipped missing file {s.name}", "warn")
+            continue
+        dest = dest_dir / s.name
+        if dest.exists():
+            stem = s.stem
+            i = 1
+            while (dest_dir / f"{stem}_{i}{s.suffix}").exists():
+                i += 1
+            dest = dest_dir / f"{stem}_{i}{s.suffix}"
+        try:
+            shutil.copy2(s, dest)
+            copied.append(str(dest))
+        except OSError as e:
+            add_event(f"retrieve: could not copy {s.name}: {e}", "error")
+    return copied
 
-    def __init__(self):
-        self._thread: threading.Thread | None = None
-        self._stop = threading.Event()
-        self._lock = threading.Lock()
-        self.enabled = False
 
-    # -- public API --------------------------------------------------------
+def retrieve_start(project_name: str, files: list[str]) -> dict:
+    """Begin a retrieval: copy selected files into retrieved/<name>/ and run
+    the pipeline on that folder in a background thread.
 
-    def start(self) -> None:
-        with self._lock:
-            if self.enabled:
-                return
-            base = get_listen_folder()
-            if not base:
-                raise RuntimeError("No listen folder configured")
-            self.enabled = True
-            self._stop.clear()
-            self._thread = threading.Thread(
-                target=self._loop, name="folder-watcher", daemon=True
-            )
-            self._thread.start()
-        add_event(
-            f"Auto-watch ENABLED (new project folders trigger the pipeline; "
-            f"/{CONDENSED_DIR_NAME} excluded)",
-            "success",
+    Returns {"ok": True, "started": True, "project_name": <final name>}.
+    On invalid input returns {"ok": False, "detail": ...} (no thread started).
+    """
+    name = (project_name or "").strip()
+    if not name:
+        return {"ok": False, "detail": "project_name is required"}
+    if not files:
+        return {"ok": False, "detail": "no files selected"}
+
+    # Resolve a free retrieved/<name>/ — suffix on collision so a re-run with
+    # the same name never clobbers a previous retrieval's cache.
+    folder = RETRIEVED_DIR / name
+    if folder.exists() and any(folder.iterdir()):
+        i = 1
+        while (RETRIEVED_DIR / f"{name}_{i}").exists() and \
+                any((RETRIEVED_DIR / f"{name}_{i}").iterdir()):
+            i += 1
+        name = f"{name}_{i}"
+        folder = RETRIEVED_DIR / name
+
+    with _retrieve_lock:
+        if _retrieve_job["running"]:
+            return {"ok": False, "detail": "A retrieval is already running"}
+        _retrieve_job.update(
+            running=True, finished=False,
+            project_name=name, current_stage=None,
+            result=None, error=None,
         )
 
-    def stop(self) -> None:
-        with self._lock:
-            if not self.enabled:
-                return
-            self.enabled = False
-            self._stop.set()
-        add_event("Auto-watch disabled", "info")
+    t = threading.Thread(
+        target=_retrieve_worker,
+        args=(name, files),
+        name="retrieve", daemon=True,
+    )
+    t.start()
+    return {"ok": True, "started": True, "project_name": name}
 
-    def status(self) -> dict:
-        return {"enabled": self.enabled}
 
-    # -- internals ---------------------------------------------------------
+def _retrieve_worker(project_name: str, files: list[str]) -> None:
+    """Copy selected files, then run scan->classify->ingest->condense on the
+    retrieved cache folder. Runs under the global processing lock so it never
+    overlaps another pipeline pass."""
+    folder = RETRIEVED_DIR / project_name
+    try:
+        copied = _copy_selected(files, folder)
+        add_event(
+            f"[{project_name}] copied {len(copied)} file(s) into "
+            f"retrieved/{project_name}/",
+            "info",
+        )
+    except Exception as e:
+        logger.exception(f"Retrieve copy failed for '{project_name}'")
+        add_event(f"[{project_name}] copy FAILED: {e}", "error")
+        _set_retrieve(running=False, finished=True,
+                      error=str(e), current_stage=None)
+        return
 
-    def _known_dirs(self, base: Path) -> set[str]:
+    with _processing_lock:
         try:
-            return {
-                p.name for p in base.iterdir()
-                if p.is_dir()
-                and p.name != CONDENSED_DIR_NAME
-                and not p.name.startswith(".")
-                and not p.name.startswith("~")
-            }
-        except OSError:
-            return set()
-
-    def _loop(self) -> None:
-        base_str = get_listen_folder()
-        if not base_str:
-            self.enabled = False
-            return
-        base = Path(base_str)
-        known = self._known_dirs(base)
-        logger.info(f"Watcher started ({len(known)} existing folder(s) marked known)")
-
-        while not self._stop.wait(WATCH_POLL_SECONDS):
-            # Follow listen-folder changes made while watching.
-            current_base = get_listen_folder()
-            if current_base and current_base != base_str:
-                base_str = current_base
-                base = Path(base_str)
-                known = self._known_dirs(base)
-                add_event("Auto-watch: listen folder changed — baseline reset", "warn")
-                continue
-
-            now = self._known_dirs(base)
-            new_dirs = sorted(now - known)
-            known = now
-            for name in new_dirs:
-                if self._stop.is_set():
-                    return
-                add_event(f"New project folder detected: {name}", "warn")
-                self._process_new_folder(base / name)
-
-        logger.info("Watcher stopped")
-
-    def _wait_until_stable(self, folder: Path) -> bool:
-        """Block until the folder's contents stop changing. False if aborted."""
-        prev = _folder_snapshot(folder)
-        stable = 0
-        while stable < STABLE_CHECKS_REQUIRED:
-            if self._stop.wait(STABLE_CHECK_SECONDS):
-                return False
-            cur = _folder_snapshot(folder)
-            stable = stable + 1 if cur == prev else 0
-            prev = cur
-        return True
-
-    def _process_new_folder(self, folder: Path) -> None:
-        if not self._wait_until_stable(folder):
-            return
-        if not _has_dossier_files(folder):
-            add_event(
-                f"[{folder.name}] ignored: no dossier files found inside", "warn"
+            _set_retrieve(current_stage="scan")
+            # Deliverable folder the user drags into the downstream AI client:
+            # retrieved/<name>/AI_FEED_DRAG_INTO_GPT/
+            drag_dir = RETRIEVED_DIR / project_name / "AI_FEED_DRAG_INTO_GPT"
+            res = run_project_pipeline(
+                project_name,
+                stage_cb=lambda s: _set_retrieve(current_stage=s),
+                folder=folder,
+                condense_dir=drag_dir,
             )
-            return
-        add_event(f"[{folder.name}] upload complete — pipeline triggered")
-        with _processing_lock:
+            add_event(
+                f"[{project_name}] preprocess complete — "
+                f"{res['files_written']} file(s) in "
+                f"retrieved/{project_name}/AI_FEED_DRAG_INTO_GPT/",
+                "success",
+            )
             try:
-                run_project_pipeline(folder.name)
-                add_event(
-                    f"[{folder.name}] pipeline complete — output in "
-                    f"{CONDENSED_DIR_NAME}/{folder.name}/",
-                    "success",
-                )
-                open_condensed_folder(folder.name)
-            except Exception as e:
-                logger.exception(f"Watcher pipeline failed for '{folder.name}'")
-                add_event(f"[{folder.name}] FAILED: {e}", "error")
-
-
-# Module-level singleton used by the API.
-watcher = Watcher()
+                open_condensed_folder(explicit_path=str(drag_dir))
+            except Exception:
+                pass
+            _set_retrieve(running=False, finished=True, result=res,
+                          current_stage=None)
+        except Exception as e:
+            logger.exception(f"Retrieve pipeline failed for '{project_name}'")
+            add_event(f"[{project_name}] FAILED: {e}", "error")
+            _set_retrieve(running=False, finished=True, error=str(e),
+                          current_stage=None)

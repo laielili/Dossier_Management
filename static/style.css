@@ -1109,6 +1109,26 @@ body {
   transition: background var(--t);
 }
 .stage-sep.done { background: var(--primary); }
+
+/* Make the stage tracker inside the run-card (legacy + search preprocess) as
+   prominent as the rest of the pipeline UI: a subtle sunken bar, centered,
+   with a bit more breathing room. */
+.run-card .stage-track {
+  justify-content: center;
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px 18px;
+  margin-top: 18px;
+}
+.run-card .stage { font-size: 13.5px; }
+.run-card .stage .dot {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+.run-card .stage-sep { width: 28px; }
+
 @keyframes stage-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(176,125,43,.45); }
   50%      { box-shadow: 0 0 0 6px rgba(176,125,43,0); }
@@ -1314,4 +1334,200 @@ body {
    produce an empty deck. */
 #render-stage {
   pointer-events: none;
+}
+
+/* ===================== Dossier Search page ===================== */
+code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--surface-sunk);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--ink);
+}
+
+/* File-type badge (per extension) */
+.ext-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  font-family: var(--font-mono);
+  flex: none;
+}
+.ext-pdf  { background: var(--type-clinical-100); color: var(--type-clinical); }
+.ext-pptx { background: var(--type-fe-100);       color: var(--type-fe); }
+.ext-docx { background: var(--type-ce-100);        color: var(--type-ce); }
+.ext-xlsx { background: var(--run-100);            color: var(--run-700); }
+
+/* Search results table */
+.results-scroll {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  max-height: 380px;
+  overflow-y: auto;
+}
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.results-table th,
+.results-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+.results-table tr:last-child td { border-bottom: none; }
+.results-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-sunk);
+  font-weight: 600;
+  color: var(--ink-2);
+  z-index: 1;
+}
+.results-table .col-check { width: 38px; text-align: center; }
+.results-table .col-icon  { width: 66px; }
+.results-table .col-type  { width: 72px; }
+.results-table .col-mod   {
+  width: 150px; color: var(--ink-2); white-space: nowrap;
+  font-family: var(--font-mono); font-size: 12px;
+}
+.results-table td.col-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.results-table .file-check {
+  width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;
+}
+.results-empty {
+  color: var(--ink-3); font-size: 13px; padding: 16px 6px; text-align: center;
+}
+
+/* Inline date-window inputs */
+.date-inputs {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px;
+}
+/* The `hidden` attribute's default display:none is overridden by the flex
+   rule above, so re-assert it for the unchecked (opt-in) state. */
+.date-inputs[hidden] {
+  display: none;
+}
+.date-inputs input[type="number"] {
+  width: 74px; padding: 7px 9px;
+  border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  font-family: inherit; font-size: 14px;
+  background: var(--surface); color: var(--ink); outline: none;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.date-inputs input[type="number"]:focus {
+  border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-100);
+}
+.date-inputs .unit { font-size: 13px; color: var(--ink-2); }
+
+/* Project-name row (above Next) */
+.project-name-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 16px; padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.project-name-row label {
+  font-size: 14px; font-weight: 600; min-width: 96px; color: var(--ink);
+}
+.project-name-row input {
+  flex: 1; padding: 9px 13px;
+  border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  font-size: 14px; font-family: inherit; background: var(--surface);
+  color: var(--ink); outline: none;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.project-name-row input:focus {
+  border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+/* Search filters (inside the single Search Target Path card) */
+.search-filters {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.keywords-row { margin-bottom: 0; }
+
+.keywords-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.keywords-stack input {
+  width: 100%;
+  padding: 9px 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--ink);
+  outline: none;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.keywords-stack input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+.date-filter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.date-filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.date-filter-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.search-button-row {
+  margin-top: 20px;
+  margin-bottom: 0;
+}
+
+/* Primary Start button — matches the legacy Run Full Pipeline button */
+.btn-start-search {
+  font-size: 15px;
+  padding: 14px 30px;
+  min-height: 52px;
+  flex: 1 1 auto;
+  background: var(--primary);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-start-search:hover:not(:disabled) {
+  background: var(--primary-700);
+  box-shadow: var(--shadow-md);
 }

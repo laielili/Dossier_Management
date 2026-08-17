@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Performance Dossier Management — Dossier Search</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/style.css?v=23">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <p class="eyebrow">Document Retrieval &amp; Preprocessing</p>
+    <h1>Dossier Search</h1>
+    <p class="subtitle">Find dossiers by keyword, then preprocess</p>
+    <nav class="page-nav">
+      <a class="btn btn-sm btn-outline" href="/legacy"
+        title="Original pipeline UI (Listen Folder + Run Full Pipeline)">Pipeline (legacy) &rsaquo;</a>
+      <a class="btn btn-sm btn-outline" href="/html2pptx"
+        title="Paste AI-generated HTML slide markup and convert it to a .pptx deck">HTML &rarr; PPTX &rsaquo;</a>
+      <a class="btn btn-sm btn-outline" href="/svg2ppt"
+        title="Paste AI-generated SVG components and build a 5-region PPTX deck (server-side)">SVG &rarr; PPTX &rsaquo;</a>
+    </nav>
+  </header>
+
+  <!-- Stepper -->
+  <div class="stepper">
+    <button class="step-pill active" data-step="1" type="button" id="pill-1">
+      <span class="num">1</span><span class="lbl">Search &amp; Select</span>
+    </button>
+    <button class="step-pill" data-step="2" type="button" id="pill-2">
+      <span class="num">2</span><span class="lbl">Preprocess</span>
+    </button>
+  </div>
+  <div class="step-indicator">Step <b id="step-num">1</b> of 2 &mdash; <span id="step-desc">Search &amp; select files</span></div>
+
+  <!-- ============ STEP 1: Search & Select ============ -->
+  <section class="step-page active" id="step-1">
+
+    <!-- Search target path + filters + start -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Search Target Path</h2>
+      </div>
+      <p class="hint">Choose the folder to search (including its subfolders) for dossier files
+        (<code>pdf</code>, <code>pptx</code>, <code>docx</code>, <code>xlsx</code>).</p>
+
+      <div class="form-row">
+        <label for="search-path">Target Path</label>
+        <div class="folder-input-group">
+          <input type="text" id="search-path" placeholder="e.g. D:\Projects\Dossiers" autocomplete="off">
+          <button class="btn btn-sm btn-outline" id="btn-browse-search" type="button"
+            title="Open a folder picker to choose the search target">Browse</button>
+          <button class="btn btn-sm btn-outline" id="btn-save-search" type="button"
+            title="Save this folder path for quick re-use across restarts">Save Path</button>
+        </div>
+      </div>
+
+      <div class="search-filters">
+        <div class="form-row column keywords-row">
+          <label for="kw1">Keywords</label>
+          <div class="keywords-stack">
+            <input type="text" id="kw1" placeholder="keyword 1">
+            <input type="text" id="kw2" placeholder="keyword 2 (optional)">
+            <input type="text" id="kw3" placeholder="keyword 3 (optional)">
+          </div>
+        </div>
+
+        <div class="date-filter-row">
+          <label class="date-filter-label">
+            <input type="checkbox" id="date-enabled" checked>
+            <span>Last-modified date within</span>
+          </label>
+          <div class="date-inputs" id="date-inputs" hidden>
+            <input type="number" id="date-years" value="1" min="0" max="50">
+            <span class="unit">years</span>
+            <input type="number" id="date-months" value="0" min="0" max="11">
+            <span class="unit">months</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="button-row search-button-row">
+        <button class="btn btn-start-search" id="btn-search" type="button">&#9654;&nbsp; Start</button>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section class="card hidden" id="results-card">
+      <div class="card-head">
+        <h2>Results <span id="result-count" class="badge">0</span></h2>
+        <div class="card-actions">
+          <label class="checkbox-inline"><input type="checkbox" id="select-all"> Select all</label>
+        </div>
+      </div>
+      <div class="results-scroll">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th class="col-check"></th>
+              <th class="col-icon">Type</th>
+              <th class="col-name">File name</th>
+              <th class="col-type">Size</th>
+              <th class="col-mod">Last modified</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+      <div id="results-empty" class="results-empty hidden">No files matched the current filter.</div>
+
+      <div class="project-name-row">
+        <label for="project-name">Project name</label>
+        <input type="text" id="project-name" placeholder="e.g. Project-2026-Q3" autocomplete="off">
+        <button class="btn btn-primary" id="btn-next" type="button">Next &rsaquo; Preprocess</button>
+      </div>
+    </section>
+  </section>
+
+  <!-- ============ STEP 2: Preprocess ============ -->
+  <section class="step-page" id="step-2">
+    <section class="card run-card">
+      <h2>Preprocessing: <span id="prep-project"></span></h2>
+      <p class="hint">Selected files were copied to <code>retrieved/<span id="prep-folder"></span>/</code>
+        and are now running through <strong>scan &rarr; classify &rarr; ingest &rarr; condense</strong>.
+        Denoised PDFs land in <code>retrieved/<span id="prep-folder"></span>/AI_FEED_DRAG_INTO_GPT/</code>
+        &mdash; drag that folder straight into the downstream AI client.
+        pptx/docx are converted to PDF (when Office is available); xlsx is left unprocessed.</p>
+
+      <div class="stage-track hidden" id="stage-track">
+        <span class="stage" data-stage="scan"><span class="dot">1</span>Scan</span>
+        <span class="stage-sep"></span>
+        <span class="stage" data-stage="classify"><span class="dot">2</span>Classify</span>
+        <span class="stage-sep"></span>
+        <span class="stage" data-stage="ingest"><span class="dot">3</span>Ingest</span>
+        <span class="stage-sep"></span>
+        <span class="stage" data-stage="condense"><span class="dot">4</span>Condense</span>
+      </div>
+      <p class="muted hidden" id="prep-progress" style="margin-top:8px;"></p>
+
+      <div id="prep-result" class="hidden" style="margin-top:14px;">
+        <p class="success" id="prep-result-text"></p>
+        <div class="prep-actions">
+          <button class="btn btn-accent" id="btn-loreal-gpt" type="button"
+            title="Open the downstream AI client (L'Oréal GPT)">L'Oréal GPT</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="step-nav">
+      <button class="btn btn-outline btn-back" id="btn-back" type="button">&lsaquo; Back to Search</button>
+    </div>
+  </section>
+
+  <!-- Log -->
+  <section class="card">
+    <h2>Log</h2>
+    <pre id="log-area" class="log"></pre>
+  </section>
+
+</div>
+
+<!-- ============ Folder picker modal ============ -->
+<div id="folder-modal" class="modal hidden">
+  <div class="modal-backdrop" id="folder-modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <h3>Select a folder</h3>
+      <button class="modal-close" id="folder-modal-close" type="button" title="Close">&times;</button>
+    </div>
+    <div class="saved-paths-block">
+      <div class="saved-paths-head">Saved Paths</div>
+      <div id="saved-paths-list" class="saved-paths-list"></div>
+    </div>
+    <div id="folder-current" class="folder-current"></div>
+    <div id="folder-list" class="folder-list"></div>
+    <div class="modal-foot">
+      <button class="btn btn-sm btn-outline" id="folder-up" type="button" title="Go up one level">Up</button>
+      <button class="btn btn-sm btn-primary" id="folder-select" type="button"
+        title="Use the current folder as the search target">Select this folder</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/search-app.js?v=1"></script>
+
+</body>
+</html>

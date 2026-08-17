@@ -22,6 +22,7 @@ html-to-pptx/node_modules/
 chroma_projects/
 screenshots/
 output/
+retrieved/
 logs/
 
 # ---------- Per-project dossier folders (new model) ----------
@@ -60,8 +61,13 @@ _trash/
 # ---------- WorkBuddy local workspace memory (not for VCS) ----------
 .workbuddy/
 
-# ---------- User-configured watch folder (machine-specific path) ----------
+# ---------- User-configured path configs (machine-specific) ----------
 listen_folder.txt
+search_paths.txt
 
 # ---------- Local reports / presentation materials ----------
 汇报/
+
+# ---------- Experiment / scratch files (verification artifacts) ----------
+_exp_*.pdf
+_exp_*

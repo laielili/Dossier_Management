@@ -108,18 +108,22 @@ class DossierPipeline:
     # Ingest
     # ------------------------------------------------------------------
 
-    def ingest(self) -> int:
+    def ingest(self, base_dir: Optional[Path | str] = None) -> int:
         """Parse all PDFs and build the page-text index.
 
         Reads classified PDFs from the per-project folder
-        PROJECT_ROOT/<project_id>/{CLINS,FE,CE}/.
+        ``base_dir/{CLINS,FE,CE}/``. ``base_dir`` defaults to
+        ``project_data_dir(project_id)`` (the normal per-project folder) but
+        may be overridden — the retrieval flow passes the
+        ``retrieved/<name>/`` folder here so the pipeline runs on the cached
+        copies rather than the live project tree.
 
         Returns:
             Total number of pages indexed.
         """
         self.init()
-        base_dir = project_data_dir(self.project_id)
-        total_pages = build_index(self.project_id, base_dir=base_dir)
+        effective_dir = Path(base_dir) if base_dir is not None else project_data_dir(self.project_id)
+        total_pages = build_index(self.project_id, base_dir=effective_dir)
 
         if total_pages == 0:
             logger.warning(
@@ -150,7 +154,7 @@ class DossierPipeline:
 
         Args:
             output_dir: base folder for the deliverable (typically
-                <listen>/Dossier_condensed/<project>/).
+                <PROJECT_ROOT>/Dossier_condensed/<project>/).
             top_n: optional per-type page cap forwarded to the retriever
                 (None = no ceiling).
 
@@ -303,7 +307,7 @@ def run_full_pipeline(
         project_id: identifier for the project collection
         top_n: optional per-type page cap forwarded to the retriever
         output_dir: deliverable folder; defaults to
-            <listen>/Dossier_condensed/<project_id>/
+            <PROJECT_ROOT>/Dossier_condensed/<project_id>/
     """
     pipeline = DossierPipeline(project_id)
     pipeline.init()

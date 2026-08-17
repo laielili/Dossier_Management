@@ -52,8 +52,12 @@ the PDFs it already has.*
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │  1. Interface Layer                                            │
-│     static/ (index.html · app.js · style.css)                  │
-│     src/api.py (FastAPI)  — one-click run, auto-watch toggle,  │
+│     static/ — 4 pages sharing style.css:                       │
+│       search.html    (Dossier Search, new homepage "/")        │
+│       index.html     (legacy pipeline UI, "/legacy")           │
+│       svg2ppt.html   (SVG → PPTX deck builder)                │
+│       html2pptx.html (HTML → PPTX utility)                     │
+│     src/api.py (FastAPI) — run, auto-watch, retrieval,         │
 │     config modal, live activity log                            │
 ├────────────────────────────────────────────────────────────────┤
 │  2. Orchestration Layer                                        │
@@ -158,6 +162,29 @@ at the **parent `Dossier_condensed/`** after a multi-project Run Full Pipeline.
 **You give:** a folder of raw dossiers.
 **You get:** a folder of denoised dossiers — one cleaned PDF per source file,
 ready for the LLM, under `<Listen Folder>/Dossier_condensed/<project>/`.
+
+---
+
+## Dossier Search & Retrieval (new primary entry point)
+
+The homepage (`/`) is now **Dossier Search** — a keyword-driven way to pull
+specific dossiers from *anywhere* on disk and preprocess just those, instead of
+pointing the whole pipeline at one Listen Folder.
+
+1. **Search & Select** — enter a target path (searched recursively for
+   `pdf` / `pptx` / `docx` / `xlsx`); keyword-filter the hits and tick the
+   files you want. The target-path history is saved to `search_paths.txt`.
+2. **Preprocess** — the selected files are copied into
+   `retrieved/<project_name>/` and the same 4-stage chain
+   (`scan → classify → ingest → condense`) runs on that cache folder. The
+   denoised per-document PDFs land under
+   `retrieved/<project_name>/Dossier_condensed/<type>/`, and the file manager
+   opens that folder at the end so you can drag the results straight into a
+   downstream AI client.
+
+The original Listen-Folder pipeline (Run Full Pipeline / Auto-Watch) is still
+available at **`/legacy`** (`static/index.html`) and behaves exactly as
+described in [The Workflow](#the-workflow) above.
 
 ---
 
@@ -273,7 +300,7 @@ python main.py reset    --project-id PROJ-001   # clear index + screenshots
 
 | Method       | Path                       | Purpose                                                     |
 | ------------ | -------------------------- | ----------------------------------------------------------- |
-| `GET`        | `/`                        | Pipeline UI                                                 |
+| `GET`        | `/`                        | Dossier Search UI (new homepage)                           |
 | `GET`        | `/html2pptx`               | HTML → PPTX utility page                                    |
 | `GET/POST`   | `/config/listen-folder`    | Read / save the active Listen Folder                        |
 | `GET`        | `/config/listen-folders`   | Full saved-folder history                                   |
@@ -296,6 +323,15 @@ python main.py reset    --project-id PROJ-001   # clear index + screenshots
 | `POST`       | `/clear`                   | Full wipe: project folders + Dossier_condensed + derived state (index/screenshots) |
 | `GET/POST`   | `/config/pptx-output`      | Read / save the PPTX output folder                          |
 | `POST`       | `/html2pptx/save`          | Persist a browser-generated PPTX                            |
+| `GET`        | `/legacy`                   | Original Listen-Folder pipeline UI                         |
+| `POST`       | `/search`                   | Keyword search for dossier files under a target path       |
+| `POST`       | `/retrieve/start`           | Copy selected files → `retrieved/<name>/` + start pipeline  |
+| `GET`        | `/retrieve/status`          | Retrieval preprocessing progress (stage tracker)           |
+| `GET/POST/DELETE` | `/config/search-paths` | Read / save / remove the search-path history            |
+| `GET`        | `/svg2ppt`                  | SVG → PPTX deck-builder page                               |
+| `POST`       | `/svg2ppt/build`            | Build a 5-region PPTX deck from `<deck>` XML               |
+| `GET`        | `/svg2ppt/files/{run_id}/{filename}` | Download a built deck / preview                  |
+| `GET`        | `/download/{project_id}`    | Download a project's denoised deliverables                 |
 
 > **`/reset` is deliberately non-destructive** — it only removes *derived* state
 > (index, screenshots). The `/clear` button is the opposite: it permanently
@@ -357,6 +393,42 @@ Playwright, no headless Chromium.
 
 ---
 
+## Side Utility — SVG → PPTX (`/svg2ppt`)
+
+A companion to HTML → PPTX, reachable from the **SVG → PPTX** button in the
+header. Where HTML → PPTX reverses *rendered* CSS geometry (error-prone), this
+builder consumes **content SVG components** whose geometry is already exact, so
+layout mistakes are structurally eliminated.
+
+The downstream `@summarize` stage (see
+[Downstream Companion Prompt](#downstream-companion-prompt)) now emits a
+`<deck>` XML of typed SVG components (`heading` / `table` / `metric-card` /
+`image` / `text-block` …). This module — `src/svg2ppt/` — routes each component
+into a 5-region page template (from `prompt/system.md`: `top_banner` /
+`meta_row` / `left_column` / `middle_column` / `right_column`, canvas
+1000×562.5), paginates with a soft `max_pages` cap, and renders the deck
+**server-side, offline** via PyMuPDF → PNG → python-pptx. The AI supplies
+*content + a semantic `type`* only; all coordinates, pagination and chrome
+(banner, side-tab, section titles) are decided by the layout engine.
+
+```
+paste/upload <deck> XML → [Build] → output/<run>/synthesis_deck.pptx + preview.html
+```
+
+| Concern  | Behaviour                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------ |
+| Input    | `<deck>` XML (components carry `type` for region routing; AI writes no x/y).                     |
+| Layout   | 5-region template, vertical stacking, overflow → continuation page (repeats chrome, middle only). |
+| Rendering| PyMuPDF rasterises each component SVG → Pillow composites the page → python-pptx 16:9 slide.     |
+| Output   | Image-type PPTX (visually faithful, not shape-editable) + HTML preview for human QA.             |
+| Theme    | L'Oréal palette from `prompt/system.md`; canvas fixed 16:9.                                      |
+| Deps     | `python-pptx` + `Pillow` + `PyMuPDF` (no browser, no headless).                                  |
+
+Design notes: `synthesis_deck_design.md`. Module layout:
+`src/svg2ppt/{schema,layout,render,api}.py` + `templates/deck_5region.json`.
+
+---
+
 ## Downstream Companion Prompt
 
 `prompt/system.md` is the system prompt for the downstream multimodal LLM
@@ -366,8 +438,11 @@ by a leading token:
 * `@extract` — parse the evidence PDFs into **strict JSON** (dynamic
   metric discovery, zero hallucination, transcribe-don't-invent traffic-light
   `status`, anti-truncation pagination).
-* `@summarize` — consume **only** that JSON and render the synthesis report;
-  every claim must be traceable to a `source` (file + page).
+* `@summarize` — consume **only** that JSON and emit the synthesis as a
+  `<deck>` XML of typed SVG components (see
+  [SVG → PPTX](#side-utility--svg--pptx-svg2ppt)); every figure must be
+  traceable to a `source` (file + page). The XML is fed to `src/svg2ppt/`
+  to build the deliverable PPTX deck.
 
 The focus meta-instruction ("when `@extract`, treat the `@summarize` section as
 non-existent, and vice versa") exists to counter long-context attention drift.
@@ -381,8 +456,13 @@ main.py                     CLI entry point
 src/                        core modules (api, orchestrator, pipeline,
                             retriever, classifier, converter, pdf_parser,
                             page_index, config, logger)
-static/                     frontend — index.html · app.js · style.css
-                            + html2pptx.html · html2pptx.js
+src/svg2ppt/                SVG → PPTX deck builder (schema, layout, render,
+                            api; templates/deck_5region.json)
+static/                     frontend pages (shared style.css):
+                              search.html · search-app.js   (Dossier Search, "/")
+                              index.html · app.js           (legacy pipeline, "/legacy")
+                              svg2ppt.html · svg2ppt-app.js (SVG → PPTX)
+                              html2pptx.html · html2pptx.js (HTML → PPTX)
 html-to-pptx/               vendored browser-side HTML→PPTX converter
                             (dist/html-to-pptx.min.js is the only runtime file)
 queries/query.txt           unified veto-term lexicon (Title Anchors +
@@ -399,6 +479,10 @@ screenshots/<TYPE>/<doc>/   300 DPI page screenshots (auto-generated, cached)
 logs/                       runtime logs (never contain the Listen Folder path)
 data/                       legacy global inbox layout — fallback only
 汇报/                        local presentation material (git-ignored)
+retrieved/                  retrieval cache — selected files + their
+                              Dossier_condensed/ deliverables (git-ignored)
+search_paths.txt            saved search-path history (git-ignored)
+synthesis_deck_design.md    svg2ppt design notes (companion doc)
 ```
 
 Per-project dossier folders live **outside** the repo, under the Listen Folder.
@@ -409,7 +493,7 @@ to `_trash/`; deliverables are now the per-document denoised PDFs above.
 
 ## Tech Stack
 
-PyMuPDF · Pillow · FastAPI · uvicorn · comtypes (Office COM) · numpy
+PyMuPDF · Pillow · python-pptx · FastAPI · uvicorn · pydantic · comtypes (Office COM)
 
 ### Design constraints worth keeping
 

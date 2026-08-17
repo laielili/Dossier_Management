@@ -1,0 +1,127 @@
+{
+  "name": "deck_5region",
+  "description": "L'Oréal synthesis deck layout derived from prompt/system.md. Canvas 1000x562.5 (16:9).",
+  "canvas": {
+    "width": 1000,
+    "height": 562.5,
+    "units": "px",
+    "dpi": 150,
+    "slide_aspect": "16:9"
+  },
+  "theme": {
+    "palette": {
+      "primary_accent": "#c8860d",
+      "header_background": "#e8c580",
+      "tab_background": "#b8860b",
+      "status_green": "#2e7d32",
+      "status_orange": "#e07b00",
+      "status_red": "#c62828",
+      "status_neutral": "#333333",
+      "text_color": "#333333",
+      "border_color": "#d9a441",
+      "page_background": "#ffffff"
+    },
+    "typography": {
+      "font_family": "Arial, sans-serif",
+      "base_font_size": 8,
+      "table_font_size": 6.5,
+      "title_font_size": 20,
+      "section_title_font_size": 15
+    }
+  },
+  "regions": {
+    "top_banner": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 70,
+      "title": null,
+      "background": "#e8c580",
+      "show_border": true,
+      "padding": [8, 12, 8, 12]
+    },
+    "meta_row": {
+      "x": 0,
+      "y": 70,
+      "w": 1000,
+      "h": 40,
+      "title": null,
+      "background": "#f5e6c6",
+      "show_border": true,
+      "padding": [6, 12, 6, 12]
+    },
+    "left_column": {
+      "x": 0,
+      "y": 110,
+      "w": 220,
+      "h": 432.5,
+      "title": "Project Details",
+      "background": "#ffffff",
+      "show_border": true,
+      "padding": [8, 10, 8, 10]
+    },
+    "middle_column": {
+      "x": 220,
+      "y": 110,
+      "w": 560,
+      "h": 432.5,
+      "title": "Measured Efficacy",
+      "background": "#ffffff",
+      "show_border": true,
+      "padding": [8, 10, 8, 10]
+    },
+    "right_column": {
+      "x": 780,
+      "y": 110,
+      "w": 220,
+      "h": 432.5,
+      "title": "Performance Summary",
+      "background": "#ffffff",
+      "show_border": true,
+      "padding": [8, 10, 8, 10]
+    }
+  },
+  "chrome": {
+    "side_tab": {
+      "enabled": true,
+      "region": "left_column",
+      "width": 24,
+      "background": "#b8860b",
+      "text_color": "#ffffff",
+      "font_size": 12,
+      "label": "PROJECT DOSSIER"
+    },
+    "borders": {
+      "enabled": true,
+      "color": "#d9a441",
+      "stroke_width": 1
+    },
+    "section_titles": {
+      "enabled": true,
+      "font_size": 15,
+      "font_color": "#c8860d",
+      "font_weight": "bold",
+      "offset_y": 18
+    }
+  },
+  "routing": {
+    "title": "top_banner",
+    "formula-ref": "top_banner",
+    "meta": "meta_row",
+    "info-card": "left_column",
+    "efficacy-table": "middle_column",
+    "consumer-block": "middle_column",
+    "summary-block": "right_column",
+    "custom": "middle_column"
+  },
+  "stacking": {
+    "default_gap": 8,
+    "scale_to_fit": false,
+    "max_pages": null
+  },
+  "pagination": {
+    "overflow_region": "middle_column",
+    "repeat_regions": ["top_banner", "meta_row", "left_column", "right_column"],
+    "continuation_label": "(continued)"
+  }
+}

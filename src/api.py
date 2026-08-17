@@ -2,10 +2,8 @@
 FastAPI server — Dossier_Management Document Pipeline
 
 Endpoints:
-  GET  /config/listen-folder  — Read the user-configured watch folder
-  POST /config/listen-folder  — Save the user-configured watch folder
   GET  /browse-folders        — Directory picker backend (returns subfolders)
-  POST /project/scan     — Scan <listen>/<name>/ (or PROJECT_ROOT/<name>/) for dossiers
+  POST /project/scan     — Scan PROJECT_ROOT/<name>/ for dossiers
   POST /classify         — Auto-classify dossiers in the project folder
   POST /classify/confirm — Apply final type decisions (move files)
   GET  /classify/profiles     — Read type profiles from classify/*.txt
@@ -17,23 +15,22 @@ Endpoints:
   GET  /queries          — Read the unified query lexicon from queries/query.txt
   POST /queries/save     — Save the unified query lexicon to queries/query.txt
   POST /reset            — Reset project (index + screenshots only)
-  POST /clear            — Full wipe of past runs: project folders + Dossier_condensed
-                           contents + derived state (index + screenshots)
-  POST /run-all          — One-click: full chain for ALL project folders,
-                           condense into <listen>/Dossier_condensed/<project>/
-  GET  /run-all/status   — Progress of the one-click run (stage tracker)
+  POST /clear            — Full wipe of past runs: Dossier_condensed contents +
+                           derived state (index + screenshots)
   GET  /activity         — Incremental activity feed for the frontend log
-  GET  /watch            — Auto-watch state
-  POST /watch            — Enable/disable the listen-folder watcher
   GET  /html2pptx        — Serves the HTML → PPTX converter page
   GET  /config/pptx-output  — Read the PPTX output folder (default: Downloads)
   POST /config/pptx-output  — Save the PPTX output folder
   POST /html2pptx/save   — Write a browser-generated PPTX (base64) to disk
+  GET  /svg2ppt         — Serves the SVG -> PPTX converter page
+  POST /svg2ppt/build   — Build a deck from AI SVG-component XML (server-side)
+  GET  /svg2ppt/files/{run_id}/{filename} — Download a generated artifact
   GET  /                — Serves the frontend UI
 """
 
 import base64
 import binascii
+import calendar
 import os
 import re
 import shutil
@@ -50,15 +47,15 @@ from .config import (
     INDEX_DIR,
     PROJECT_ROOT,
     REPORT_TYPES,
+    RETRIEVED_DIR,
     SCREENSHOTS_DIR,
     default_pptx_output_dir,
-    delete_listen_folder,
-    get_listen_folders,
-    get_listen_folder,
+    delete_search_path,
     get_pptx_output_dir,
+    get_search_paths,
     set_pptx_output_dir,
+    set_search_path,
     project_data_dir,
-    set_listen_folder,
     NOISE_CATEGORY_LABELS,
 )
 # NOTE: DATA_DIR (the legacy global data/ folder) is intentionally no longer
@@ -81,10 +78,10 @@ from .orchestrator import (
     CONDENSED_DIR_NAME,
     get_events,
     open_condensed_folder,
-    run_all_start,
-    run_all_status,
-    watcher,
+    retrieve_start,
+    retrieve_status,
 )
+from .svg2ppt.api import router as svg2ppt_router
 
 logger = get_logger("api")
 
@@ -95,6 +92,10 @@ def _is_dossier_ext(name: str) -> bool:
 
 
 app = FastAPI(title="Dossier_Management Document Pipeline", version="2.0")
+
+# SVG -> PPTX deck builder (new, additive). Serves /svg2ppt and builds decks
+# entirely server-side. Existing html2pptx / dossier endpoints are untouched.
+app.include_router(svg2ppt_router)
 
 # Serve static files (CSS, JS, etc.)
 app.mount(
@@ -130,15 +131,7 @@ class RunRequest(BaseModel):
 
 
 class ScanRequest(BaseModel):
-    project_name: str  # folder name under the listen folder (or PROJECT_ROOT) to scan for dossiers
-
-
-class ListenFolderRequest(BaseModel):
-    path: str  # absolute path of the user-configured watch folder
-
-
-class WatchRequest(BaseModel):
-    enabled: bool  # turn the auto-watch on/off
+    project_name: str  # folder name under PROJECT_ROOT to scan for dossiers
 
 
 class QueriesSaveRequest(BaseModel):
@@ -172,6 +165,38 @@ class ClassifyConfirmRequest(BaseModel):
 class ClassifyProfileSaveRequest(BaseModel):
     profiles: dict[str, str]
 
+
+class SearchPathRequest(BaseModel):
+    path: str  # absolute folder to search inside (saved as a history entry)
+
+
+class SearchRequest(BaseModel):
+    """Search a target folder (recursively) for dossier files.
+
+    Keywords are matched against the FILE NAME only (case-insensitive
+    substring, OR logic — a file matches if ANY non-empty keyword appears).
+    1–3 keywords may be supplied; empty entries are ignored. The last-modified
+    filter is optional; when enabled only files modified within
+    ``modified_years`` years + ``modified_months`` months are returned.
+    """
+    target_path: str
+    keywords: list[str] = []
+    modified_enabled: bool = False
+    modified_years: int = 1
+    modified_months: int = 0
+
+
+class RetrieveStartRequest(BaseModel):
+    """Kick off preprocessing for a set of selected files.
+
+    The server copies each file into retrieved/<project_name>/ (collision-safe)
+    and runs the pipeline (scan -> classify -> ingest -> condense) on that
+    cache folder. Non-PDF files (pptx/docx) are converted to PDF by the
+    pipeline's classifier when Office is available; xlsx is left unprocessed.
+    """
+    project_name: str
+    files: list[str]
+
 # ---------------------------------------------------------------------------
 # Global pipeline state (one project at a time)
 # ---------------------------------------------------------------------------
@@ -193,11 +218,20 @@ def _get_pipeline(project_id: str = "default") -> DossierPipeline:
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    """Serve the frontend UI."""
-    index_path = PROJECT_ROOT / "static" / "index.html"
+    """Serve the frontend UI (Dossier Search — the new homepage)."""
+    index_path = PROJECT_ROOT / "static" / "search.html"
     if index_path.exists():
         return HTMLResponse(index_path.read_text(encoding="utf-8"))
-    return HTMLResponse("<h2>Frontend not found. Place index.html in static/</h2>")
+    return HTMLResponse("<h2>Frontend not found. Place search.html in static/</h2>")
+
+
+@app.get("/legacy", response_class=HTMLResponse)
+async def legacy_page():
+    """Serve the original pipeline UI (Listen Folder + Run Full Pipeline)."""
+    page = PROJECT_ROOT / "static" / "index.html"
+    if page.exists():
+        return HTMLResponse(page.read_text(encoding="utf-8"))
+    return HTMLResponse("<h2>index.html not found in static/</h2>", status_code=404)
 
 
 @app.get("/html2pptx", response_class=HTMLResponse)
@@ -207,45 +241,6 @@ async def html2pptx_page():
     if page.exists():
         return HTMLResponse(page.read_text(encoding="utf-8"))
     return HTMLResponse("<h2>html2pptx.html not found in static/</h2>", status_code=404)
-
-
-# ---------------------------------------------------------------------------
-# Listen-folder config + folder browser (persisted to listen_folder.txt)
-# NOTE: the path value is intentionally NEVER written to logs.
-# ---------------------------------------------------------------------------
-
-def _default_listen_folder() -> str:
-    """Default listen folder: %HOMEDRIVE%%HOMEPATH%/Documents.
-
-    Used when the user has not saved any listen folder yet, so the input is
-    pre-filled with a sensible per-user location.
-    """
-    drive = os.environ.get("HOMEDRIVE", "")
-    home = os.environ.get("HOMEPATH", "")
-    base = Path(drive + home) if (drive or home) else Path.home()
-    return str(base / "Documents")
-
-
-@app.get("/config/listen-folder")
-async def get_listen_folder_config():
-    """Return the user-configured watch folder (base path for projects).
-
-    Falls back to %HOMEDRIVE%%HOMEPATH%/Documents when nothing is saved yet
-    (`is_default` tells the frontend the value is a suggestion, not saved).
-    """
-    saved = get_listen_folder()
-    if saved:
-        return {"ok": True, "path": saved, "is_default": False}
-    return {"ok": True, "path": _default_listen_folder(), "is_default": True}
-
-
-@app.post("/config/listen-folder")
-async def set_listen_folder_config(req: ListenFolderRequest):
-    """Persist the user-configured watch folder to listen_folder.txt."""
-    if not req.path or not req.path.strip():
-        raise HTTPException(400, "path is required")
-    set_listen_folder(req.path.strip())
-    return {"ok": True, "path": get_listen_folder() or ""}
 
 
 @app.get("/config/params")
@@ -271,40 +266,46 @@ async def get_config_params():
     }
 
 
-@app.get("/config/listen-folders")
-async def get_listen_folders_config():
-    """Return the full ordered history of saved listen folders.
 
-    `active` is the first entry (used as the base dir for projects). The
-    frontend folder picker renders `paths` as a re-selectable history list
-    with per-row delete controls.
+
+
+
+@app.get("/config/search-paths")
+async def get_search_paths_config():
+    """Return the saved search target paths (history, most-recent first).
+
+    The frontend renders these as a re-loadable / deletable list in the
+    search UI. The path value is intentionally NEVER written to logs.
     """
-    folders = get_listen_folders()
+    paths = get_search_paths()
     return {
         "ok": True,
-        "paths": folders,
-        "active": folders[0] if folders else "",
+        "paths": paths,
+        "active": paths[0] if paths else "",
     }
 
 
-@app.delete("/config/listen-folder")
-async def delete_listen_folder_config(path: str = ""):
-    """Delete a single saved listen folder from the history list.
+@app.post("/config/search-paths")
+async def set_search_path_config(req: SearchPathRequest):
+    """Persist a search target path to search_paths.txt (history)."""
+    if not req.path or not req.path.strip():
+        raise HTTPException(400, "path is required")
+    set_search_path(req.path.strip())
+    return {"ok": True, "path": req.path.strip()}
 
-    Query param `path` is the absolute folder to remove. The path value is
-    intentionally never written to logs.
-    """
+
+@app.delete("/config/search-paths")
+async def delete_search_path_config(path: str = ""):
+    """Delete a single saved search target path from the history list."""
     if not path or not path.strip():
         raise HTTPException(400, "path is required")
-    removed = delete_listen_folder(path.strip())
+    removed = delete_search_path(path.strip())
     if not removed:
         raise HTTPException(404, "path not found in saved list")
-    folders = get_listen_folders()
     return {
         "ok": True,
         "removed": path.strip(),
-        "paths": folders,
-        "active": folders[0] if folders else "",
+        "paths": get_search_paths(),
     }
 
 
@@ -419,14 +420,11 @@ async def package(req: PackageRequest):
     Body (JSON):
         project_id: str  (default "default")
         top_n: int | null  (optional per-type page cap)
-    The deliverable is written to <listen>/Dossier_condensed/<project_id>/.
+    The deliverable is written to <PROJECT_ROOT>/Dossier_condensed/<project_id>/.
     """
     pipeline = _get_pipeline(req.project_id)
     try:
-        base = get_listen_folder()
-        if not base:
-            raise HTTPException(400, "No listen folder configured — save one first")
-        out_dir = Path(base) / CONDENSED_DIR_NAME / req.project_id
+        out_dir = PROJECT_ROOT / CONDENSED_DIR_NAME / req.project_id
         result = pipeline.condense(output_dir=out_dir, top_n=req.top_n)
         return {
             "ok": True,
@@ -450,16 +448,13 @@ async def run_pipeline(req: RunRequest):
         project_id: str  (default "default")
         top_n: int | null  (optional per-type page cap)
     The deliverable (cleaned per-doc PDFs) is written to
-    <listen>/Dossier_condensed/<project_id>/.
+    <PROJECT_ROOT>/Dossier_condensed/<project_id>/.
     """
     pipeline = _get_pipeline(req.project_id)
     try:
         n = pipeline.ingest()
         logger.info(f"Ingested {n} pages for project '{req.project_id}'")
-        base = get_listen_folder()
-        if not base:
-            raise HTTPException(400, "No listen folder configured — save one first")
-        out_dir = Path(base) / CONDENSED_DIR_NAME / req.project_id
+        out_dir = PROJECT_ROOT / CONDENSED_DIR_NAME / req.project_id
         result = pipeline.condense(output_dir=out_dir, top_n=req.top_n)
         logger.info(f"Condense complete -> {out_dir}")
         return {
@@ -495,11 +490,11 @@ async def download(project_id: str):
     """Deprecated.
 
     Output is now a folder of per-document PDFs under
-    <listen>/Dossier_condensed/<project_id>/, not a single file, so there is
-    nothing to download here. Kept as a 404 so any stale client fails clearly.
+    <PROJECT_ROOT>/Dossier_condensed/<project_id>/, not a single file, so there
+    is nothing to download here. Kept as a 404 so any stale client fails clearly.
     """
     raise HTTPException(
-        404, "Output is now a folder; see <listen>/Dossier_condensed/<project_id>/"
+        404, "Output is now a folder; see <PROJECT_ROOT>/Dossier_condensed/<project_id>/"
     )
 
 
@@ -511,51 +506,31 @@ async def reset(project_id: str = "default"):
     return {"ok": True, "project_id": project_id}
 
 
-# NOTE: the former /clear-reset endpoint was removed — /clear now performs the
-# same derived-state wipe (index + screenshots) on top of deleting the
-# listen-folder project subfolders and Dossier_condensed contents.
+# NOTE: /clear wipes the Dossier_condensed export folder plus derived state
+# (index + screenshots). The listen-folder project-subfolder deletion was retired
+# with the listen-folder configuration feature.
 
 @app.post("/clear")
 async def clear_residual():
     """Permanently delete the residual left by past processing runs.
 
     Scope (IRREVERSIBLE — the frontend requires an explicit confirm first):
-      1) every project subfolder under the Listen Folder (the dossier source
-         files) EXCEPT /Dossier_condensed and system/hidden folders;
-      2) all contents of <Listen Folder>/Dossier_condensed/ (the exported PDFs);
-      3) all *derived* state from previous runs — the page-text index
+      1) all contents of <PROJECT_ROOT>/Dossier_condensed/ (the exported PDFs);
+      2) all *derived* state from previous runs — the page-text index
          (index_projects/) and the screenshot cache (screenshots/).
 
-    The Listen Folder itself and /Dossier_condensed (the folder, not its
-    contents) are kept so the next run can export into it immediately.
-    Listen-folder paths are intentionally NEVER written to the server log.
+    The Dossier_condensed folder itself (not its contents) is kept so the next
+    run can export into it immediately. Project paths are intentionally NEVER
+    written to the server log.
     """
-    base = get_listen_folder()
-    if not base:
-        raise HTTPException(400, "No listen folder configured — save one first")
-    base_p = Path(base)
-    if not base_p.exists() or not base_p.is_dir():
-        raise HTTPException(400, f"Listen folder does not exist: {base}")
+    base_p = PROJECT_ROOT
 
     removed: list[str] = []
     errors: list[dict] = []
 
-    # 1) Project subfolders under the listen folder (the source dossiers).
-    for child in sorted(base_p.iterdir()):
-        if not child.is_dir():
-            continue
-        if child.name == CONDENSED_DIR_NAME:
-            continue
-        if child.name.startswith(".") or child.name.startswith("~"):
-            continue
-        try:
-            shutil.rmtree(child)
-            removed.append(str(child))
-        except OSError as e:
-            logger.warning(f"clear: could not remove {child}: {e}")
-            errors.append({"path": str(child), "error": str(e)})
 
-    # 2) Everything inside /Dossier_condensed (keep the folder itself).
+
+    # 1) Everything inside /Dossier_condensed (keep the folder itself).
     condensed = base_p / CONDENSED_DIR_NAME
     if condensed.exists():
         for item in sorted(condensed.iterdir()):
@@ -569,10 +544,9 @@ async def clear_residual():
                 logger.warning(f"clear: could not remove {item}: {e}")
                 errors.append({"path": str(item), "error": str(e)})
 
-    # 3) Derived state (global, lives under PROJECT_ROOT, keyed by project_id).
-    #    These are NOT removed by deleting the listen-folder project subfolders
-    #    above, so wipe them wholesale — they are cheap to regenerate and are
-    #    exactly the "residual of past runs" this button targets.
+    # 2) Derived state (global, lives under PROJECT_ROOT, keyed by project_id).
+    #    Wipe it wholesale — it is cheap to regenerate and is exactly the
+    #    "residual of past runs" this button targets.
     #    (a) page-text index
     if INDEX_DIR.exists():
         for f in INDEX_DIR.glob("*.json"):
@@ -742,62 +716,106 @@ async def save_queries(req: QueriesSaveRequest):
 
 
 # ---------------------------------------------------------------------------
-# One-click full workflow + auto-watch (orchestrator)
+# Dossier retrieval — search a target folder, then preprocess selected files
 # ---------------------------------------------------------------------------
 
-@app.post("/run-all")
-async def run_all():
-    """One-click workflow: for EVERY eligible project folder under the listen
-    folder run scan -> classify -> ingest -> package, then export the PDF to
-    <listen>/Dossier_condensed/. Runs in a background thread; poll
-    /run-all/status for progress.
+SEARCH_EXTS = {".pdf", ".pptx", ".docx", ".xlsx"}
+
+
+def _cutoff_datetime(years: int, months: int) -> datetime:
+    """A datetime ``years`` years + ``months`` months before now.
+
+    Used by the optional last-modified filter. Computed by rolling the calendar
+    back (clamping the day to the target month's length) rather than a naive
+    day-count approximation, so "1 year 0 months" is exact.
     """
-    if not get_listen_folder():
-        raise HTTPException(400, "No listen folder configured — save one first")
-    return run_all_start()
+    now = datetime.now()
+    total_months = max(0, int(years) * 12 + int(months))
+    y = now.year - total_months // 12
+    m = now.month - (total_months % 12)
+    while m <= 0:
+        y -= 1
+        m += 12
+    last = calendar.monthrange(y, m)[1]
+    d = min(now.day, last)
+    return now.replace(year=y, month=m, day=d)
 
 
-@app.get("/run-all/status")
-async def run_all_job_status():
-    """Progress of the one-click run (stage tracker data)."""
-    return {"ok": True, **run_all_status()}
+@app.post("/search")
+async def search_files(req: SearchRequest):
+    """Search a target folder (recursively, incl. subfolders) for dossiers.
+
+    Matches file NAME against 1–3 keywords with OR logic (case-insensitive
+    substring). When ``modified_enabled`` is true, only files whose
+    last-modified time is within the requested window are returned.
+    """
+    target = Path(req.target_path).expanduser()
+    if not target.exists() or not target.is_dir():
+        raise HTTPException(404, f"Folder not found: {req.target_path}")
+
+    keywords = [k.strip().lower() for k in (req.keywords or []) if k and k.strip()]
+    cutoff = None
+    # Apply the window only when the filter is enabled AND a non-zero span is
+    # requested. A user setting 0 years + 0 months (with the filter on) almost
+    # certainly means "no date limit" rather than "modified within 0 days", so
+    # treat that case as no filter to avoid a confusingly empty result.
+    if req.modified_enabled and (int(req.modified_years) or int(req.modified_months)):
+        try:
+            cutoff = _cutoff_datetime(req.modified_years, req.modified_months)
+        except Exception:
+            cutoff = None
+
+    files = []
+    for p in target.rglob("*"):
+        if not p.is_file():
+            continue
+        ext = p.suffix.lower()
+        if ext not in SEARCH_EXTS:
+            continue
+        if _is_junk_filename(p.name):
+            continue
+        name_l = p.name.lower()
+        if keywords and not any(kw in name_l for kw in keywords):
+            continue
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        mtime = datetime.fromtimestamp(st.st_mtime)
+        if cutoff and mtime < cutoff:
+            continue
+        files.append({
+            "path": str(p),
+            "name": p.name,
+            "ext": ext.lstrip(".").upper(),
+            "size_kb": round(st.st_size / 1024, 1),
+            "modified": mtime.strftime("%Y-%m-%d %H:%M"),
+        })
+    files.sort(key=lambda f: f["name"].lower())
+    # The target path is user data — never write it to the server log.
+    return {"ok": True, "count": len(files), "files": files}
+
+
+@app.post("/retrieve/start")
+async def retrieve_start_endpoint(req: RetrieveStartRequest):
+    """Copy selected files into retrieved/<project_name>/ and start the
+    pipeline on that cache folder. Returns the resolved project name."""
+    out = retrieve_start(req.project_name, req.files)
+    if not out.get("ok"):
+        raise HTTPException(400, out.get("detail", "could not start retrieval"))
+    return out
+
+
+@app.get("/retrieve/status")
+async def retrieve_status_endpoint():
+    """Progress of the retrieval preprocessing run (stage tracker data)."""
+    return {"ok": True, **retrieve_status()}
 
 
 @app.get("/activity")
 async def activity(since: int = 0):
     """Incremental activity feed for the frontend log (id > since)."""
     return {"ok": True, **get_events(since)}
-
-
-@app.get("/watch")
-async def watch_status():
-    """Current auto-watch state."""
-    return {"ok": True, **watcher.status()}
-
-
-@app.post("/watch")
-async def watch_toggle(req: WatchRequest):
-    """Enable/disable the listen-folder watcher.
-
-    When ON, any NEW project folder dropped into the listen folder (excluding
-    /Dossier_condensed) is auto-processed once its upload finishes.
-    """
-    try:
-        if req.enabled:
-            if not get_listen_folder():
-                raise HTTPException(
-                    400, "No listen folder configured — save one first"
-                )
-            watcher.start()
-            open_condensed_folder()
-        else:
-            watcher.stop()
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Watch toggle failed")
-        raise HTTPException(500, str(e))
-    return {"ok": True, **watcher.status()}
 
 
 # ---------------------------------------------------------------------------
