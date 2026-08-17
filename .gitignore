@@ -71,3 +71,6 @@ search_paths.txt
 # ---------- Experiment / scratch files (verification artifacts) ----------
 _exp_*.pdf
 _exp_*
+
+#Demo
+demo/

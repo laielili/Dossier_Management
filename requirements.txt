@@ -6,9 +6,6 @@
 # --- PDF parsing (text extraction + page screenshots) ---
 PyMuPDF>=1.24.0
 
-# --- PDF generation (merged output) ---
-reportlab>=4.2.0
-
 # --- Image processing (screenshot handling) ---
 Pillow>=10.4.0
 
