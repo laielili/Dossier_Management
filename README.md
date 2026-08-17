@@ -70,7 +70,7 @@ the PDFs it already has.*
 │  3. Processing Layer                                           │
 │     converter (Office COM) · pdf_parser (PyMuPDF)              │
 │     classifier (lexical)   · page_index (JSON page store)      │
-│     retriever (noise-deletion) · ocr (easyocr scanned→text)    │
+│     retriever (noise-deletion)                                 │
 ├────────────────────────────────────────────────────────────────┤
 │  4. Storage Layer                                              │
 │     index_projects/*.json · screenshots/ · Dossier_condensed/  │
@@ -85,7 +85,7 @@ the PDFs it already has.*
 | --------------------- | ----------------------------------------------------------------------------------------------------------- |
 | **Interface**   | What the user touches — single-screen web UI + REST API.                                                    |
 | **Orchestration** | Sequences the per-project chain, serializes concurrent work, streams progress to the UI.                    |
-| **Processing**  | Stateless workers: convert → parse → classify → index → denoise → write cleaned PDF copies. A scanned-PDF OCR pre-pass runs before classify. |
+| **Processing**  | Stateless workers: convert → parse → classify → index → denoise → write cleaned PDF copies. |
 | **Storage**     | Page-text index (JSON, no vectors), screenshot cache, denoised per-document PDFs under `Dossier_condensed/<project>/`. |
 | **Config**      | Paths, noise-deletion thresholds, and the user-editable term lists. Runtime overrides persisted to `config_overrides.json`. |
 
@@ -123,15 +123,14 @@ is intentionally **never written to the log files**.
 Both drive the same 4-stage chain per project, shown live in the stage tracker:
 
 ```
-scan → (OCR pre-pass for scanned PDFs) → classify → ingest → condense
+scan → classify → ingest → condense
 ```
 
 * **scan** — list top-level dossier files (pdf/pptx/docx, junk filtered).
 * **classify** — first 1–2 pages of each doc scored against `classify/*.txt`;
   confident matches are moved into `CLINS/` `FE/` `CE/`; `UNKNOWN` stays put and
-  is reported as a warning. Scanned / image-only PDFs (no text layer) are run
-  through an **OCR pre-pass** first, so the classifier sees synthesised text
-  instead of a blank page.
+  is reported as a warning. PDFs with no extractable text layer are left
+  UNKNOWN but still indexed and de-noised like any other file.
 * **ingest** — convert → parse every page → write `index_projects/<project>.json`
   (text + structural signals) and the 300 DPI screenshot cache. No embeddings.
 * **condense** — denoise every source dossier: drop the noise pages the retriever
@@ -178,7 +177,7 @@ pointing the whole pipeline at one Listen Folder.
    files you want. The target-path history is saved to `search_paths.txt`.
 2. **Preprocess** — the selected files are copied into
    `retrieved/<project_name>/` and the same chain
-   (`scan → (OCR pre-pass for scanned PDFs) → classify → ingest → condense`) runs
+   (`scan → classify → ingest → condense`) runs
    on that cache folder. The
    denoised per-document PDFs land under
    `retrieved/<project_name>/Dossier_condensed/<type>/`, and the file manager
@@ -357,11 +356,6 @@ python main.py reset    --project-id PROJ-001   # clear index + screenshots
 | `TOP_N_PER_TYPE`                  | `config.py` / `--top-n`        | `12`    | Ceiling, **only** when explicitly requested |
 | `SCREENSHOT_DPI`                  | `config.py`                    | `300`   | Page screenshot resolution (ingest cache)   |
 | `CLASSIFY_MIN_SCORE` / `_MARGIN`  | `config.py`                    | `1` / `1` | Auto-file gate (else manual review)       |
-| `OCR_ENABLED`                     | `config.py`                    | `True`   | Run OCR pre-pass on scanned (text-less) PDFs |
-| `OCR_LANGS`                       | `config.py`                    | `("en",)` | easyocr language codes; add `"ch_sim"` for Chinese |
-| `OCR_DPI`                         | `config.py`                    | `300`    | Render resolution for the OCR pre-pass      |
-| `OCR_GPU`                         | `config.py`                    | `False`  | Use GPU for OCR (needs CUDA)                |
-| `OCR_DETECTOR`                   | `config.py`                    | `"craft"` | easyocr detector; `"dbnet18"` is lighter (needs less RAM) |
 | Noise thresholds                  | `config.py`                    | —       | `BLANK_MAX_CHARS` (30), `BLANK_MAX_FONT` (18), `COVER_MIN_FONT` (20), `COVER_MAX_CHARS` (60), `COVER_MAX_FIGURES` (3), `CLOSING_MAX_CHARS` (120), `BOILERPLATE_MIN_PAGES` (10), `BOILERPLATE_MIN_UNIQUE_CHARS` (40), `VETO_MIN_UNIQUE_CHARS` (10) — code-defined, not user-tunable via UI |
 | `pptx_output_dir`                 | `config_overrides.json` (UI)   | Downloads | Where HTML → PPTX writes                  |
 
@@ -466,7 +460,7 @@ non-existent, and vice versa") exists to counter long-context attention drift.
 main.py                     CLI entry point
 src/                        core modules (api, orchestrator, pipeline,
                             retriever, classifier, converter, pdf_parser,
-                            page_index, config, logger, ocr)
+                            page_index, config, logger)
 src/svg2ppt/                SVG → PPTX deck builder (schema, layout, render,
                             api; templates/deck_5region.json)
 static/                     frontend pages (shared style.css):
@@ -504,7 +498,7 @@ to `_trash/`; deliverables are now the per-document denoised PDFs above.
 
 ## Tech Stack
 
-PyMuPDF · Pillow · python-pptx · FastAPI · uvicorn · pydantic · comtypes (Office COM) · easyocr (OCR pre-pass, scanned PDFs only)
+PyMuPDF · Pillow · python-pptx · FastAPI · uvicorn · pydantic · comtypes (Office COM)
 
 ### Design constraints worth keeping
 

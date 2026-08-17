@@ -190,25 +190,6 @@ class PDFParser:
         self.close()
 
 
-def pdf_has_text(file_path: Path) -> bool:
-    """Return True if the PDF contains any extractable text on any page.
-
-    Used by the retrieval pipeline to distinguish text-based dossiers from
-    scanned / image-only PDFs — the latter have no text layer and therefore
-    cannot be classified or indexed without OCR. Cheap: only checks for the
-    presence of text, never builds a full index.
-    """
-    file_path = Path(file_path)
-    doc = fitz.open(str(file_path))
-    try:
-        for i in range(len(doc)):
-            if doc[i].get_text().strip():
-                return True
-        return False
-    finally:
-        doc.close()
-
-
 def extract_first_page_text(
     file_path: Path,
     max_pages: int = 2,

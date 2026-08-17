@@ -40,14 +40,20 @@ from .classifier import Classifier
 from .converter import _is_junk_filename
 from .logger import get_logger
 from .pipeline import DossierPipeline
-from .pdf_parser import pdf_has_text
-from .ocr import ocr_ensure_text
 
 logger = get_logger("orchestrator")
 
 # Folder (under PROJECT_ROOT) that receives finished PDFs. Excluded from
 # scanning.
 CONDENSED_DIR_NAME = "Dossier_condensed"
+
+# Deliverable root the user drags into the downstream AI client. The pipeline
+# writes the typed category folders (CLINS/FE/CE) one level deeper, under a
+# folder named after the project, so the layout is:
+#   retrieved/<name>/AI_feed/<name>/{CLINS,FE,CE}/...
+# The file explorer pops open at retrieved/<name>/AI_feed/ so the user sees a
+# single <name> folder to drag wholesale into the downstream AI.
+AI_FEED_DIR_NAME = "AI_feed"
 
 DOSSIER_EXTS = (".pdf", ".pptx", ".docx")
 
@@ -68,8 +74,9 @@ def open_condensed_folder(
     """Open the OS file explorer at the deliverable folder.
 
     Prefer ``explicit_path`` when given (the retrieval flow uses it to reveal
-    ``retrieved/<name>/AI_FEED_DRAG_INTO_GPT`` — the folder the user drags into
-    the downstream AI client). Otherwise fall back to the legacy layout:
+    ``retrieved/<name>/AI_feed`` — the folder the user drags into the
+    downstream AI client; inside it lives a single ``<name>`` folder holding the
+    typed category subfolders). Otherwise fall back to the legacy layout:
     <PROJECT_ROOT>/Dossier_condensed/<project_name>/ (or the parent folder when
     ``project_name`` is omitted).
 
@@ -158,7 +165,7 @@ def run_project_pipeline(
 
     ``condense_dir`` overrides where denoised per-document PDFs are written
     (defaults to ``<PROJECT_ROOT>/Dossier_condensed/<project_name>/``). The
-    retrieval flow points this at ``retrieved/<name>/AI_FEED_DRAG_INTO_GPT``
+    retrieval flow points this at ``retrieved/<name>/AI_feed/<name>``
     so the deliverable is one drag-in folder away from the downstream AI client.
     """
     def stage(name: str):
@@ -178,38 +185,6 @@ def run_project_pipeline(
     ]
     add_event(f"[{project_name}] scan: {len(top_level)} unclassified file(s) at top level")
 
-    # Detect scanned / image-only PDFs (no text layer) and run the OCR pre-pass
-    # so they gain a real text layer before classify/ingest. Files that already
-    # have text are returned unchanged.
-    image_only = [
-        name for name in top_level
-        if name.lower().endswith(".pdf") and not pdf_has_text(folder / name)
-    ]
-    ocr_failed: list[str] = []
-    if image_only:
-        add_event(
-            f"[{project_name}] {len(image_only)} scanned/image-only PDF(s) with no "
-            f"text layer — running OCR pre-pass: {', '.join(image_only)}",
-            "warn",
-        )
-        for name in image_only:
-            try:
-                ocr_path = ocr_ensure_text(folder / name)
-                if Path(ocr_path).resolve() != (folder / name).resolve():
-                    shutil.copy2(ocr_path, folder / name)
-                    add_event(
-                        f"[{project_name}] OCR applied to {name} "
-                        f"(text layer synthesized)",
-                        "info",
-                    )
-            except Exception as e:
-                ocr_failed.append(name)
-                logger.exception(f"OCR pre-pass failed for {name}")
-                add_event(
-                    f"[{project_name}] OCR FAILED for {name}: {e}",
-                    "error",
-                )
-
     # -- 2) classify (auto-accept predicted types) ---------------------------
     stage("classify")
     classifier = Classifier(base_dir=folder)
@@ -225,7 +200,7 @@ def run_project_pipeline(
     add_event(
         f"[{project_name}] classify: {len(results)} file(s) "
         f"({len(moved)} assigned to CLINS/FE/CE, {len(unknown)} UNKNOWN "
-        f"— still indexed & denoised)",
+        f"— still processed)",
         "info",
     )
     for u in unprocessed:
@@ -242,25 +217,16 @@ def run_project_pipeline(
     n_pages = pipeline.ingest(base_dir=folder)
     add_event(f"[{project_name}] ingest: {n_pages} page(s) indexed")
     if n_pages == 0:
-        if ocr_failed:
-            raise RuntimeError(
-                f"No pages ingested for '{project_name}': "
-                f"{len(ocr_failed)} scanned/image-only file(s) could not be "
-                f"OCR'd ({', '.join(ocr_failed)}). Install/repair easyocr "
-                f"(pip install easyocr) or check the scan quality."
-            )
-        if image_only:
-            # Scanned PDFs with no usable text layer — OCR was skipped
-            # (disabled) or ran but produced nothing.
-            raise RuntimeError(
-                f"No pages ingested for '{project_name}': "
-                f"{len(image_only)} scanned/image-only file(s) have no "
-                f"extractable text layer ({', '.join(image_only)}). The "
-                f"pipeline needs OCR for these — enable/repair easyocr "
-                f"(pip install easyocr) or drop them from the retrieval."
-            )
-        raise RuntimeError(
-            f"No pages ingested for '{project_name}' — nothing to package"
+        # Not a failure: a scanned / image-only PDF has no text layer, so no
+        # text pages can be indexed (and OCR is disabled). Classification still
+        # ran; the pipeline proceeds and the file is passed through unchanged.
+        add_event(
+            f"[{project_name}] 0 text pages indexed — source PDF(s) appear to "
+            f"have no extractable text layer (scanned / image-only). "
+            f"Classification still completed; the file(s) will be passed "
+            f"through to the deliverable unchanged (no text-based noise "
+            f"removal is possible without OCR).",
+            "warn",
         )
 
     # -- 4) condense: denoise + write cleaned per-doc PDFs --------------------
@@ -269,7 +235,7 @@ def run_project_pipeline(
         project_out = Path(condense_dir)
     else:
         project_out = PROJECT_ROOT / CONDENSED_DIR_NAME / project_name
-    result = pipeline.condense(output_dir=project_out)
+    result = pipeline.condense(output_dir=project_out, source_dir=folder)
     add_event(
         f"[{project_name}] condense: {result['sources_processed']} source(s), "
         f"{result['pages_dropped']} noise page(s) dropped -> "
@@ -405,9 +371,12 @@ def _retrieve_worker(project_name: str, files: list[str]) -> None:
     with _processing_lock:
         try:
             _set_retrieve(current_stage="scan")
-            # Deliverable folder the user drags into the downstream AI client:
-            # retrieved/<name>/AI_FEED_DRAG_INTO_GPT/
-            drag_dir = RETRIEVED_DIR / project_name / "AI_FEED_DRAG_INTO_GPT"
+            # Deliverable root the user drags into the downstream AI client:
+            #   retrieved/<name>/AI_feed/                        (explorer opens here)
+            #   retrieved/<name>/AI_feed/<name>/                 (condense output root)
+            #   retrieved/<name>/AI_feed/<name>/{CLINS,FE,CE}/   (typed category folders)
+            ai_feed_dir = RETRIEVED_DIR / project_name / AI_FEED_DIR_NAME
+            drag_dir = ai_feed_dir / project_name
             res = run_project_pipeline(
                 project_name,
                 stage_cb=lambda s: _set_retrieve(current_stage=s),
@@ -417,11 +386,13 @@ def _retrieve_worker(project_name: str, files: list[str]) -> None:
             add_event(
                 f"[{project_name}] preprocess complete — "
                 f"{res['files_written']} file(s) in "
-                f"retrieved/{project_name}/AI_FEED_DRAG_INTO_GPT/",
+                f"retrieved/{project_name}/{AI_FEED_DIR_NAME}/{project_name}/",
                 "success",
             )
             try:
-                open_condensed_folder(explicit_path=str(drag_dir))
+                # Open the explorer one level up so the user sees a single
+                # <project_name> folder and drags that whole folder in.
+                open_condensed_folder(explicit_path=str(ai_feed_dir))
             except Exception:
                 pass
             _set_retrieve(running=False, finished=True, result=res,

@@ -28,7 +28,9 @@ from .page_index import (
     build_index,
     index_count,
     delete_index,
+    collect_pdf_paths,
 )
+from .pdf_parser import infer_report_type
 from .retriever import build_retriever, Retriever
 
 logger = get_logger("pipeline")
@@ -139,6 +141,7 @@ class DossierPipeline:
         self,
         output_dir: Path | str,
         top_n: int | None = None,
+        source_dir: Optional[Path | str] = None,
     ) -> dict:
         """Denoise every source dossier and write cleaned per-document PDFs.
 
@@ -165,7 +168,17 @@ class DossierPipeline:
         """
         self.init()
         if self.retriever.count() == 0:
-            raise RuntimeError("No pages ingested. Run ingest first.")
+            # No text pages were indexed — typically a scanned / image-only PDF
+            # with no extractable text layer (and no OCR configured). Lexical
+            # noise detection is impossible, so pass the source PDFs through
+            # unchanged into the deliverable folder rather than hard-failing.
+            logger.warning(
+                "condense: 0 text pages indexed — source appears to have no "
+                "extractable text layer (scanned/image-only PDF, no OCR). "
+                "Passing files through unchanged (no text-based noise removal "
+                "is possible without OCR)."
+            )
+            return self._pass_through(output_dir, source_dir)
 
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -256,6 +269,56 @@ class DossierPipeline:
             "files_written": files_written,
             "pages_dropped": pages_dropped,
             "sources_processed": sources_processed,
+        }
+
+    # ------------------------------------------------------------------
+    # Pass-through (no text layer -> no lexical denoise possible)
+    # ------------------------------------------------------------------
+
+    def _pass_through(
+        self,
+        output_dir: Path | str,
+        source_dir: Optional[Path | str] = None,
+    ) -> dict:
+        """Copy source PDFs into the deliverable unchanged.
+
+        Used when ``condense`` finds 0 indexed text pages (e.g. a scanned /
+        image-only PDF with no text layer and no OCR). Lexical noise detection
+        cannot run, so the files are written through verbatim, typed by their
+        parent folder (or UNKNOWN for top-level files), so the downstream AI
+        client still receives a complete, processed deliverable folder.
+        """
+        base = (
+            Path(source_dir)
+            if source_dir is not None
+            else project_data_dir(self.project_id)
+        )
+        pdfs = collect_pdf_paths(base)
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        files_written: list[str] = []
+        for src in pdfs:
+            rt = infer_report_type(src)
+            dest_dir = output_dir / rt
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / src.name
+            try:
+                shutil.copy2(src, dest)
+                files_written.append(f"{rt}/{src.name}")
+                logger.info(f"condense(pass-through): {src.name} -> {dest}")
+            except OSError as e:
+                logger.warning(f"condense(pass-through): cannot copy {src.name}: {e}")
+
+        logger.info(
+            f"Pass-through complete: {len(files_written)} source(s) copied "
+            f"unchanged to {output_dir}"
+        )
+        return {
+            "output_dir": str(output_dir),
+            "files_written": files_written,
+            "pages_dropped": 0,
+            "sources_processed": len(files_written),
         }
 
     # ------------------------------------------------------------------

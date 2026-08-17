@@ -43,9 +43,9 @@ def collect_pdf_paths(base_dir: Path | None = None) -> list[Path]:
 
     # Also index top-level (UNKNOWN) PDFs — files the classifier could not
     # confidently assign to CLINS/FE/CE stay at the folder root. They still
-    # carry a text layer (real, or OCR-synthesized) and must be indexed +
-    # denoised. infer_report_type() resolves their type to "UNKNOWN" because
-    # the parent folder is not a typed subfolder.
+    # carry a text layer and must be indexed + denoised. infer_report_type()
+    # resolves their type to "UNKNOWN" because the parent folder is not a
+    # typed subfolder.
     try:
         convert_folder(base)
     except ConverterUnavailable as e:

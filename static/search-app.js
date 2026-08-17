@@ -460,7 +460,8 @@ async function pollRetrieveStatus() {
     const folder = $("#prep-folder").textContent;
     rt.textContent =
       `✓ Preprocess finished — ${fw.length} file(s) written to ` +
-      `retrieved/${folder}/AI_FEED_DRAG_INTO_GPT/`;
+      `retrieved/${folder}/AI_feed/${folder}/` +
+      ` (drag the ${folder} folder into the downstream AI).`;
     rt.className = "success";
   } catch (err) {
     /* transient */

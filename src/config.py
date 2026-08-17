@@ -100,21 +100,6 @@ REPORT_TYPE_LABELS = {
 # --- PDF parsing ---
 SCREENSHOT_DPI = 300          # High resolution for crisp screenshots (~4x default 72 DPI)
 
-# --- OCR pre-pass (scanned / image-only PDFs) ---
-# A retrieved PDF with no text layer is OCR'd (easyocr) to synthesize a text
-# layer, so classify / ingest / denoise all read page.get_text() exactly as on
-# a normal PDF. Requires `easyocr` (pip install easyocr; the project env already
-# provides torch). Set OCR_ENABLED=False to fall back to the old behavior where
-# scanned PDFs fail with a clear "needs OCR" diagnostic.
-OCR_ENABLED = True
-OCR_LANGS = ("en",)          # easyocr language codes; add "ch_sim" for Chinese
-OCR_DPI = 300                # render resolution for OCR (higher = better, slower)
-OCR_GPU = False              # easyocr GPU (needs CUDA); CPU is fine for dossiers
-OCR_DETECTOR = "craft"       # text-detection backbone: "craft" (accurate) or
-                             # "dbnet18" (lighter/faster, lower RAM). Switch to
-                             # dbnet18 if OCR runs out of memory on a small box.
-OCR_CACHE_DIR = PROJECT_ROOT / ".ocr_cache"
-
 # --- Page-selection: NOISE-based deletion ---
 # We KEEP every page by default and delete ONLY pages we can PROVE are noise
 # (see src/retriever.classify_noise + veto). A "veto" layer force-keeps any
@@ -323,7 +308,6 @@ for d in [
     QUERIES_DIR,
     CLASSIFY_DIR,
     CLASSIFY_PROFILE_DIR,
-    OCR_CACHE_DIR,
 ]:
     d.mkdir(parents=True, exist_ok=True)
 
