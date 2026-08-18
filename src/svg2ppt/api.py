@@ -71,7 +71,10 @@ class Svg2PptxBuildRequest(BaseModel):
     chrome_font_scale: float = 1.0   # banner/section-title font multiplier (region chrome)
     title_font_scale: float = 1.0    # top_banner content (title/formula-ref) multiplier
     meta_font_scale: float = 1.0     # meta_row content multiplier
-    content_font_scale: float = 1.0  # left/middle/right column content multiplier (drives pages)
+    content_font_scale: float = 1.0  # shared fallback for all three columns (kept for back-compat)
+    left_font_scale: float = 1.0     # left_column content multiplier
+    middle_font_scale: float = 1.0   # middle_column content multiplier (drives pages)
+    right_font_scale: float = 1.0    # right_column content multiplier
     margin_scale: float = 1.0        # region padding + inter-component gap multiplier
 
 
@@ -135,6 +138,9 @@ async def svg2ppt_build(req: Svg2PptxBuildRequest):
                 "title_font_scale": req.title_font_scale,
                 "meta_font_scale": req.meta_font_scale,
                 "content_font_scale": req.content_font_scale,
+                "left_font_scale": req.left_font_scale,
+                "middle_font_scale": req.middle_font_scale,
+                "right_font_scale": req.right_font_scale,
                 "margin_scale": req.margin_scale,
             },
         )

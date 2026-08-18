@@ -55,10 +55,29 @@ class DeckBuilder:
         self.content_font_scale = self._clamp_scale(
             overrides.get("content_font_scale", 1.0)
         )
+        # Per-column font scales: default to the shared content scale so old
+        # callers (and old presets) keep working untouched.
+        self.left_font_scale = self._clamp_scale(
+            overrides.get("left_font_scale", self.content_font_scale)
+        )
+        self.middle_font_scale = self._clamp_scale(
+            overrides.get("middle_font_scale", self.content_font_scale)
+        )
+        self.right_font_scale = self._clamp_scale(
+            overrides.get("right_font_scale", self.content_font_scale)
+        )
         layout_overrides = {
             k: v
             for k, v in overrides.items()
-            if k not in ("title_font_scale", "meta_font_scale", "content_font_scale")
+            if k
+            not in (
+                "title_font_scale",
+                "meta_font_scale",
+                "content_font_scale",
+                "left_font_scale",
+                "middle_font_scale",
+                "right_font_scale",
+            )
         }
         self.layout_engine = LayoutEngine(
             template_path, max_pages=max_pages, overrides=layout_overrides
@@ -75,9 +94,10 @@ class DeckBuilder:
     def _apply_content_scale(self, deck: DeckXML) -> None:
         """Scale each component's SVG by its routed region's font module.
 
-        top_banner -> title_font_scale, meta_row -> meta_font_scale, the three
-        columns (left/middle/right) -> content_font_scale. Only components whose
-        module scale differs from 1.0 are rewritten (1.0 is a no-op).
+        top_banner -> title_font_scale, meta_row -> meta_font_scale, and each
+        column independently: left_column -> left_font_scale, middle_column ->
+        middle_font_scale, right_column -> right_font_scale. Only components
+        whose module scale differs from 1.0 are rewritten (1.0 is a no-op).
         """
         regions = self.layout_engine.regions
         routing = self.layout_engine.routing
@@ -85,6 +105,9 @@ class DeckBuilder:
         scale_by_region = {
             "top_banner": self.title_font_scale,
             "meta_row": self.meta_font_scale,
+            "left_column": self.left_font_scale,
+            "middle_column": self.middle_font_scale,
+            "right_column": self.right_font_scale,
         }
         for comp in deck.components:
             region = comp.attrs.get("region")

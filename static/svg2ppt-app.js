@@ -32,8 +32,12 @@
   const ovTitleFontVal = $("ov-title-font-val");
   const ovMetaFont = $("ov-meta-font");
   const ovMetaFontVal = $("ov-meta-font-val");
-  const ovContentFont = $("ov-content-font");
-  const ovContentFontVal = $("ov-content-font-val");
+const ovLeftFont = $("ov-left-font");
+const ovLeftFontVal = $("ov-left-font-val");
+const ovMidFont = $("ov-mid-font");
+const ovMidFontVal = $("ov-mid-font-val");
+const ovRightFont = $("ov-right-font");
+const ovRightFontVal = $("ov-right-font-val");
   const ovMargin = $("ov-margin");
   const ovMarginVal = $("ov-margin-val");
   const btnRerender = $("btn-rerender");
@@ -248,7 +252,9 @@
       },
       title_font_scale: parseFloat(ovTitleFont.value) || 1.0,
       meta_font_scale: parseFloat(ovMetaFont.value) || 1.0,
-      content_font_scale: parseFloat(ovContentFont.value) || 1.0,
+      left_font_scale: parseFloat(ovLeftFont.value) || 1.0,
+      middle_font_scale: parseFloat(ovMidFont.value) || 1.0,
+      right_font_scale: parseFloat(ovRightFont.value) || 1.0,
       margin_scale: parseFloat(ovMargin.value) || 1.0,
     };
   }
@@ -302,7 +308,9 @@
   }
   bindScaleControl(ovTitleFont, ovTitleFontVal);
   bindScaleControl(ovMetaFont, ovMetaFontVal);
-  bindScaleControl(ovContentFont, ovContentFontVal);
+  bindScaleControl(ovLeftFont, ovLeftFontVal);
+  bindScaleControl(ovMidFont, ovMidFontVal);
+  bindScaleControl(ovRightFont, ovRightFontVal);
   bindScaleControl(ovMargin, ovMarginVal);
   [ovAccent, ovHeaderBg, ovTabBg, ovBorder].forEach((el) =>
     el.addEventListener("change", scheduleRerender)
@@ -367,11 +375,17 @@
     ovBorder.value = tov.border_color || THEME_DEFAULTS.border_color;
     ovTitleFont.value = p.title_font_scale || 1.0;
     ovMetaFont.value = p.meta_font_scale || 1.0;
-    ovContentFont.value = p.content_font_scale || 1.0;
+    // Old presets stored a single content_font_scale for all three columns.
+    const legacy = p.content_font_scale || 1.0;
+    ovLeftFont.value = p.left_font_scale || legacy;
+    ovMidFont.value = p.middle_font_scale || legacy;
+    ovRightFont.value = p.right_font_scale || legacy;
     ovMargin.value = p.margin_scale || 1.0;
     ovTitleFontVal.textContent = parseFloat(ovTitleFont.value).toFixed(1) + "×";
     ovMetaFontVal.textContent = parseFloat(ovMetaFont.value).toFixed(1) + "×";
-    ovContentFontVal.textContent = parseFloat(ovContentFont.value).toFixed(1) + "×";
+    ovLeftFontVal.textContent = parseFloat(ovLeftFont.value).toFixed(1) + "×";
+    ovMidFontVal.textContent = parseFloat(ovMidFont.value).toFixed(1) + "×";
+    ovRightFontVal.textContent = parseFloat(ovRightFont.value).toFixed(1) + "×";
     ovMarginVal.textContent = parseFloat(ovMargin.value).toFixed(1) + "×";
     scheduleRerender();
   }
