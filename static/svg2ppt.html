@@ -11,6 +11,57 @@
   .preview-page { text-align:center; }
   .preview-page .page-cap { font-size:12px; color:#777; margin:4px 0 2px; }
   .preview-page img { width:100%; max-width:1000px; height:auto; border:1px solid #d9a441; display:block; margin:0 auto; background:#fff; }
+
+  /* Adjustment panel layout: side-by-side collapsible groups */
+  .adjustment-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .adjustment-row > .form-row { margin-bottom: 0; }
+
+  .collapsible {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-sm);
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .collapsible-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface-sunk);
+    border: none;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+  }
+  .collapsible-header:hover { background: var(--surface-sunk-2); }
+  .collapsible-header .chevron {
+    font-size: 12px;
+    color: var(--ink-3);
+    transition: transform var(--t-fast);
+  }
+  .collapsible:not(.collapsed) .collapsible-header .chevron { transform: rotate(90deg); }
+
+  .collapsible-content {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .collapsible.collapsed .collapsible-content { display: none; }
+
+  .collapsible-content .form-row { margin-bottom: 0; }
+  .collapsible-content .form-row label { min-width: 80px; }
+  .collapsible-content .param-hint { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -64,20 +115,6 @@
     </div>
 
     <div class="form-row">
-      <label for="max-pages">Max pages</label>
-      <div class="folder-input-group">
-        <input type="range" id="max-pages" min="0" max="20" value="0" step="1">
-        <span class="param-status" id="max-pages-val">0 (auto)</span>
-      </div>
-    </div>
-    <p class="hint param-hint"><strong>0 = no cap</strong> (add pages, full fidelity). A positive value is a <strong>hard cap</strong>: the engine compresses the overflow column &mdash; font-size, vertical spacing, inter-card gap and intra-card horizontal whitespace &mdash; until the deck fits. The density factor is near-unbounded (floor 0.15), so readability is sacrificed when needed to honor the cap.</p>
-
-    <div class="form-row">
-      <label for="dpi">Render DPI</label>
-      <input type="number" id="dpi" value="150" min="72" max="300">
-    </div>
-
-    <div class="form-row">
       <label for="file-name">File name</label>
       <div class="folder-input-group">
         <input type="text" id="file-name" value="synthesis_deck" autocomplete="off">
@@ -114,6 +151,123 @@
     <div class="preview-strip" id="preview-strip"></div>
   </section>
 
+  <!-- ============ Debug / Theme overrides ============ -->
+  <section class="card hidden" id="debug-card">
+    <div class="card-head">
+      <h2>Adjustments</h2>
+      <span class="param-status" id="debug-hint">Runtime Configuration</span>
+    </div>
+    <p class="hint">Tune the look without re-pasting the XML. Changes re-render the deck
+      live (debounced); the <strong>Preview</strong> and <strong>Download</strong> button
+      always reflect the latest version.</p>
+
+    <div class="adjustment-row">
+      <div class="collapsible collapsed" id="collapsible-color">
+        <button class="collapsible-header" type="button" aria-expanded="false">
+          <span>Color</span>
+          <span class="chevron">▶</span>
+        </button>
+        <div class="collapsible-content">
+          <div class="form-row">
+            <label for="ov-accent">Accent</label>
+            <input type="color" id="ov-accent" value="#c8860d">
+          </div>
+          <div class="form-row">
+            <label for="ov-header-bg">Header bg</label>
+            <input type="color" id="ov-header-bg" value="#e8c580">
+          </div>
+          <div class="form-row">
+            <label for="ov-tab-bg">Side tab bg</label>
+            <input type="color" id="ov-tab-bg" value="#b8860b">
+          </div>
+          <div class="form-row">
+            <label for="ov-border">Border</label>
+            <input type="color" id="ov-border" value="#d9a441">
+          </div>
+          <div class="form-row">
+            <label for="ov-text">Text</label>
+            <input type="color" id="ov-text" value="#333333">
+          </div>
+        </div>
+      </div>
+
+      <div class="collapsible collapsed" id="collapsible-font-size">
+        <button class="collapsible-header" type="button" aria-expanded="false">
+          <span>Font Size</span>
+          <span class="chevron">▶</span>
+        </button>
+        <div class="collapsible-content">
+          <div class="form-row">
+            <label for="ov-chrome-font">Chrome font</label>
+            <div class="folder-input-group">
+              <input type="range" id="ov-chrome-font" min="0.5" max="2.0" value="1.0" step="0.1">
+              <span class="param-status" id="ov-chrome-font-val">1.0×</span>
+            </div>
+          </div>
+          <p class="hint param-hint">Banner / section-title / side-tab font size (cosmetic, does not change page count).</p>
+
+          <div class="form-row">
+            <label for="ov-content-font">Content font</label>
+            <div class="folder-input-group">
+              <input type="range" id="ov-content-font" min="0.5" max="2.0" value="1.0" step="0.1">
+              <span class="param-status" id="ov-content-font-val">1.0×</span>
+            </div>
+          </div>
+          <p class="hint param-hint">Table / card text size. Larger → content grows → <strong>more pages</strong>; smaller → fewer pages.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label for="ov-margin">Card margin</label>
+      <div class="folder-input-group">
+        <input type="range" id="ov-margin" min="0.5" max="2.0" value="1.0" step="0.1">
+        <span class="param-status" id="ov-margin-val">1.0×</span>
+      </div>
+    </div>
+    <p class="hint param-hint">Scales every region padding + inter-component gap. Larger → less fits per page → <strong>more pages</strong>.</p>
+
+    <div class="adjustment-row">
+      <div class="form-row">
+        <label for="max-pages">Max pages</label>
+        <div class="folder-input-group">
+          <input type="range" id="max-pages" min="0" max="20" value="0" step="1">
+          <span class="param-status" id="max-pages-val">0 (auto)</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="dpi">Render DPI</label>
+        <input type="number" id="dpi" value="150" min="72" max="300">
+      </div>
+    </div>
+    <p class="hint param-hint"><strong>0 = no cap</strong> (add pages, full fidelity). A positive value is a <strong>hard cap</strong>: the engine compresses the overflow column &mdash; font-size, vertical spacing, inter-card gap and intra-card horizontal whitespace &mdash; until the deck fits. The density factor is near-unbounded (floor 0.15), so readability is sacrificed when needed to honor the cap.</p>
+
+    <div class="button-row" style="margin-top:14px;">
+      <button class="btn btn-accent" id="btn-rerender" type="button"
+        title="Re-render the deck with current overrides">&#8635;&nbsp; Re-render</button>
+    </div>
+
+    <hr style="margin:18px 0; border:none; border-top:1px solid #eee;">
+
+    <div class="card-head"><h3>Presets</h3></div>
+    <div class="form-row">
+      <label for="preset-name">Name</label>
+      <div class="folder-input-group">
+        <input type="text" id="preset-name" placeholder="e.g. compact" autocomplete="off">
+        <button class="btn btn-sm btn-outline" id="btn-preset-save" type="button">Save</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <label for="preset-select">Load</label>
+      <div class="folder-input-group">
+        <select id="preset-select" style="flex:1;">
+          <option value="">— saved presets —</option>
+        </select>
+        <button class="btn btn-sm btn-outline" id="btn-preset-delete" type="button">Delete</button>
+      </div>
+    </div>
+  </section>
+
   <!-- Log -->
   <section class="card">
     <h2>Log</h2>
@@ -122,7 +276,7 @@
 
 </div>
 
-<script src="/static/svg2ppt-app.js?v=1"></script>
+<script src="/static/svg2ppt-app.js?v=2"></script>
 
 </body>
 </html>

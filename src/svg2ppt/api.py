@@ -24,7 +24,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import DeckBuilder, SchemaError
 from .render import RenderError
@@ -56,7 +56,8 @@ class Svg2PptxBuildRequest(BaseModel):
     """Build a deck from AI-provided SVG-component XML.
 
     ``xml`` is the full <deck> document (one <component type=...><svg>…</svg>
-    per component). All other fields are optional UI-driven options.
+    per component). All other fields are optional UI-driven options, including
+    the runtime debug/theme overrides applied by the svg2ppt engine.
     """
 
     xml: str
@@ -64,6 +65,12 @@ class Svg2PptxBuildRequest(BaseModel):
     max_pages: int = 0          # 0 => no cap (add-pages); >0 => hard cap, compress to fit
     dpi: int = 150              # render resolution for the raster deck
     theme: str = "loreal"       # reserved for future multi-template support
+
+    # --- Debug / theme overrides (runtime only, never persisted) ---
+    theme_overrides: dict = Field(default_factory=dict)   # structural/theme colors
+    chrome_font_scale: float = 1.0   # banner/section-title font multiplier
+    content_font_scale: float = 1.0  # component text multiplier (drives page count)
+    margin_scale: float = 1.0        # region padding + inter-component gap multiplier
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +127,12 @@ async def svg2ppt_build(req: Svg2PptxBuildRequest):
             template_path=None,
             dpi=dpi,
             max_pages=req.max_pages,
+            overrides={
+                "theme_overrides": req.theme_overrides or {},
+                "chrome_font_scale": req.chrome_font_scale,
+                "content_font_scale": req.content_font_scale,
+                "margin_scale": req.margin_scale,
+            },
         )
         result = builder.build_from_string(xml, out_dir, filename=filename)
     except SchemaError as exc:

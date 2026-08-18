@@ -54,7 +54,7 @@ the PDFs it already has.*
 │  1. Interface Layer                                            │
 │     static/ — 4 pages sharing style.css:                       │
 │       search.html    (Dossier Search, new homepage "/")        │
-│       index.html     (legacy pipeline UI, "/legacy")           │
+│       file_listener.html (File Listener pipeline UI, "/FileListener") │
 │       svg2ppt.html   (SVG → PPTX deck builder)                │
 │       html2pptx.html (HTML → PPTX utility)                     │
 │     src/api.py (FastAPI) — run, auto-watch, retrieval,         │
@@ -185,7 +185,7 @@ pointing the whole pipeline at one Listen Folder.
    downstream AI client.
 
 The original Listen-Folder pipeline (Run Full Pipeline / Auto-Watch) is still
-available at **`/legacy`** (`static/index.html`) and behaves exactly as
+available at **`/FileListener`** (`static/file_listener.html`) and behaves exactly as
 described in [The Workflow](#the-workflow) above.
 
 ---
@@ -328,7 +328,7 @@ python main.py reset    --project-id PROJ-001   # clear index + screenshots
 | `POST`       | `/clear`                   | Full wipe: project folders + Dossier_condensed + derived state (index/screenshots) |
 | `GET/POST`   | `/config/pptx-output`      | Read / save the PPTX output folder                          |
 | `POST`       | `/html2pptx/save`          | Persist a browser-generated PPTX                            |
-| `GET`        | `/legacy`                   | Original Listen-Folder pipeline UI                         |
+| `GET`        | `/FileListener`             | Original Listen-Folder pipeline UI (File Listener)         |
 | `POST`       | `/search`                   | Keyword search for dossier files under a target path       |
 | `POST`       | `/retrieve/start`           | Copy selected files → `retrieved/<name>/` + start pipeline  |
 | `GET`        | `/retrieve/status`          | Retrieval preprocessing progress (stage tracker)           |
@@ -465,7 +465,7 @@ src/svg2ppt/                SVG → PPTX deck builder (schema, layout, render,
                             api; templates/deck_5region.json)
 static/                     frontend pages (shared style.css):
                               search.html · search-app.js   (Dossier Search, "/")
-                              index.html · app.js           (legacy pipeline, "/legacy")
+                              file_listener.html · app.js    (File Listener pipeline, "/FileListener")
                               svg2ppt.html · svg2ppt-app.js (SVG → PPTX)
                               html2pptx.html · html2pptx.js (HTML → PPTX)
 html-to-pptx/               vendored browser-side HTML→PPTX converter

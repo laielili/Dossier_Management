@@ -225,13 +225,13 @@ async def index():
     return HTMLResponse("<h2>Frontend not found. Place search.html in static/</h2>")
 
 
-@app.get("/legacy", response_class=HTMLResponse)
-async def legacy_page():
-    """Serve the original pipeline UI (Listen Folder + Run Full Pipeline)."""
-    page = PROJECT_ROOT / "static" / "index.html"
+@app.get("/FileListener", response_class=HTMLResponse)
+async def file_listener():
+    """Serve the original pipeline UI (Listen Folder + Run Full Pipeline), branded File Listener."""
+    page = PROJECT_ROOT / "static" / "file_listener.html"
     if page.exists():
         return HTMLResponse(page.read_text(encoding="utf-8"))
-    return HTMLResponse("<h2>index.html not found in static/</h2>", status_code=404)
+    return HTMLResponse("<h2>file_listener.html not found in static/</h2>", status_code=404)
 
 
 @app.get("/html2pptx", response_class=HTMLResponse)

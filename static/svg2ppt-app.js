@@ -22,6 +22,39 @@
   const previewStrip = $("preview-strip");
   const btnPreviewHide = $("btn-preview-hide");
 
+  // ---- Debug / theme override controls ----
+  const debugCard = $("debug-card");
+  const ovAccent = $("ov-accent");
+  const ovHeaderBg = $("ov-header-bg");
+  const ovTabBg = $("ov-tab-bg");
+  const ovBorder = $("ov-border");
+  const ovText = $("ov-text");
+  const ovChromeFont = $("ov-chrome-font");
+  const ovChromeFontVal = $("ov-chrome-font-val");
+  const ovContentFont = $("ov-content-font");
+  const ovContentFontVal = $("ov-content-font-val");
+  const ovMargin = $("ov-margin");
+  const ovMarginVal = $("ov-margin-val");
+  const btnRerender = $("btn-rerender");
+  const presetName = $("preset-name");
+  const presetSelect = $("preset-select");
+  const btnPresetSave = $("btn-preset-save");
+  const btnPresetDelete = $("btn-preset-delete");
+
+  // Defaults mirror templates/deck_5region.json (loreal theme).
+  const THEME_DEFAULTS = {
+    primary_accent: "#c8860d",
+    header_background: "#e8c580",
+    tab_background: "#b8860b",
+    border_color: "#d9a441",
+    text_color: "#333333",
+  };
+  const PRESET_KEY = "svg2ppt_presets";
+
+  // Last successful build — re-render reuses its XML + base options.
+  let lastBuild = null;
+  let rerenderTimer = null;
+
   function log(msg) {
     const area = $("log-area");
     if (!area) return;
@@ -79,6 +112,7 @@
     const v = parseInt(maxPages.value, 10);
     maxPagesVal.textContent = v === 0 ? "0 (auto)" : String(v);
   });
+  maxPages.addEventListener("change", scheduleRerender);
 
   $("btn-build").addEventListener("click", buildDeck);
 
@@ -118,23 +152,14 @@
         return;
       }
 
-      resultText.className = "success";
-      resultText.textContent = `Built ${data.page_count} page(s).`;
-      resultMeta.textContent = `${data.filename} · ${data.size_kb} KB`;
-      btnDownload.href = data.pptx_url;
-      btnDownload.setAttribute("download", data.filename);
-      renderPreview(data);
-      resultCard.classList.remove("hidden");
-
-      if (data.warnings && data.warnings.length) {
-        resultWarnings.classList.remove("hidden");
-        resultWarnings.innerHTML =
-          "<ul>" + data.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("") + "</ul>";
-      } else {
-        resultWarnings.classList.add("hidden");
-        resultWarnings.innerHTML = "";
-      }
-      log(`Done: ${data.page_count} page(s), ${data.size_kb} KB.`);
+      lastBuild = {
+        xml: xml,
+        filename: payload.filename,
+        max_pages: payload.max_pages,
+        dpi: payload.dpi,
+      };
+      applyBuildResult(data);
+      debugCard.classList.remove("hidden");
     } catch (e) {
       log("Network error: " + e.message);
       resultCard.classList.remove("hidden");
@@ -186,6 +211,186 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
   }
+
+  // ------------------------------------------------------------------
+  // Build-result application (shared by Build and Re-render)
+  // ------------------------------------------------------------------
+  function applyBuildResult(data) {
+    resultText.className = "success";
+    resultText.textContent = `Built ${data.page_count} page(s).`;
+    resultMeta.textContent = `${data.filename} · ${data.size_kb} KB`;
+    btnDownload.href = data.pptx_url;
+    btnDownload.setAttribute("download", data.filename);
+    renderPreview(data);
+    resultCard.classList.remove("hidden");
+
+    if (data.warnings && data.warnings.length) {
+      resultWarnings.classList.remove("hidden");
+      resultWarnings.innerHTML =
+        "<ul>" + data.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("") + "</ul>";
+    } else {
+      resultWarnings.classList.add("hidden");
+      resultWarnings.innerHTML = "";
+    }
+    log(`Done: ${data.page_count} page(s), ${data.size_kb} KB.`);
+  }
+
+  // ------------------------------------------------------------------
+  // Debug / theme overrides — live re-render (the Download always matches Preview)
+  // ------------------------------------------------------------------
+  function collectOverrides() {
+    return {
+      theme_overrides: {
+        primary_accent: ovAccent.value,
+        header_background: ovHeaderBg.value,
+        tab_background: ovTabBg.value,
+        border_color: ovBorder.value,
+        text_color: ovText.value,
+      },
+      chrome_font_scale: parseFloat(ovChromeFont.value) || 1.0,
+      content_font_scale: parseFloat(ovContentFont.value) || 1.0,
+      margin_scale: parseFloat(ovMargin.value) || 1.0,
+    };
+  }
+
+  async function rerender() {
+    if (!lastBuild) {
+      log("Build the deck first, then use the debug panel.");
+      return;
+    }
+    const payload = {
+      xml: lastBuild.xml,
+      filename: lastBuild.filename,
+      max_pages: parseInt(maxPages.value, 10) || 0,
+      dpi: parseInt($("dpi").value, 10) || 150,
+      ...collectOverrides(),
+    };
+    log("Re-rendering with overrides…");
+    btnRerender.disabled = true;
+    try {
+      const resp = await fetch("/svg2ppt/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) {
+        const msg = data.detail || data.message || "Re-render failed";
+        log("ERROR: " + msg);
+        return;
+      }
+      applyBuildResult(data);
+    } catch (e) {
+      log("Network error: " + e.message);
+    } finally {
+      btnRerender.disabled = false;
+    }
+  }
+
+  function scheduleRerender() {
+    clearTimeout(rerenderTimer);
+    rerenderTimer = setTimeout(rerender, 400);
+  }
+
+  function bindScaleControl(el, labelEl) {
+    if (labelEl) {
+      el.addEventListener("input", () => {
+        labelEl.textContent = parseFloat(el.value).toFixed(1) + "×";
+      });
+    }
+    el.addEventListener("change", scheduleRerender);
+  }
+  bindScaleControl(ovChromeFont, ovChromeFontVal);
+  bindScaleControl(ovContentFont, ovContentFontVal);
+  bindScaleControl(ovMargin, ovMarginVal);
+  [ovAccent, ovHeaderBg, ovTabBg, ovBorder, ovText].forEach((el) =>
+    el.addEventListener("change", scheduleRerender)
+  );
+  $("dpi").addEventListener("change", scheduleRerender);
+
+  // Collapsible panels in the Adjustments card
+  document.querySelectorAll(".collapsible-header").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const wrap = btn.closest(".collapsible");
+      const collapsed = wrap.classList.toggle("collapsed");
+      btn.setAttribute("aria-expanded", String(!collapsed));
+    });
+  });
+
+  if (btnRerender) btnRerender.addEventListener("click", rerender);
+
+  // ------------------------------------------------------------------
+  // Presets (browser localStorage — not written to server files)
+  // ------------------------------------------------------------------
+  function readPresets() {
+    try {
+      return JSON.parse(localStorage.getItem(PRESET_KEY) || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function loadPresetList() {
+    const presets = readPresets();
+    presetSelect.innerHTML = '<option value="">— saved presets —</option>';
+    Object.keys(presets).forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      presetSelect.appendChild(opt);
+    });
+  }
+
+  function savePreset() {
+    const name = (presetName.value || "").trim();
+    if (!name) {
+      log("Preset name required.");
+      return;
+    }
+    const presets = readPresets();
+    presets[name] = collectOverrides();
+    localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+    loadPresetList();
+    presetSelect.value = name;
+    log(`Saved preset "${name}".`);
+  }
+
+  function applyPreset(name) {
+    if (!name) return;
+    const p = readPresets()[name];
+    if (!p) return;
+    const tov = p.theme_overrides || {};
+    ovAccent.value = tov.primary_accent || THEME_DEFAULTS.primary_accent;
+    ovHeaderBg.value = tov.header_background || THEME_DEFAULTS.header_background;
+    ovTabBg.value = tov.tab_background || THEME_DEFAULTS.tab_background;
+    ovBorder.value = tov.border_color || THEME_DEFAULTS.border_color;
+    ovText.value = tov.text_color || THEME_DEFAULTS.text_color;
+    ovChromeFont.value = p.chrome_font_scale || 1.0;
+    ovContentFont.value = p.content_font_scale || 1.0;
+    ovMargin.value = p.margin_scale || 1.0;
+    ovChromeFontVal.textContent = parseFloat(ovChromeFont.value).toFixed(1) + "×";
+    ovContentFontVal.textContent = parseFloat(ovContentFont.value).toFixed(1) + "×";
+    ovMarginVal.textContent = parseFloat(ovMargin.value).toFixed(1) + "×";
+    scheduleRerender();
+  }
+
+  function deletePreset() {
+    const name = presetSelect.value;
+    if (!name) {
+      log("Select a preset to delete.");
+      return;
+    }
+    const presets = readPresets();
+    delete presets[name];
+    localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+    loadPresetList();
+    log(`Deleted preset "${name}".`);
+  }
+
+  if (btnPresetSave) btnPresetSave.addEventListener("click", savePreset);
+  if (btnPresetDelete) btnPresetDelete.addEventListener("click", deletePreset);
+  if (presetSelect) presetSelect.addEventListener("change", () => applyPreset(presetSelect.value));
+  loadPresetList();
 
   updateStat();
   log("SVG -> PPTX ready. Load a sample or paste a deck XML, then Build.");

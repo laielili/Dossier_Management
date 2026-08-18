@@ -11,14 +11,18 @@
 
 <div class="app">
 
+  <!-- Top-right corner: Config (copied from File Listener page) -->
+  <button class="btn btn-sm btn-outline config-corner" id="btn-config" type="button"
+    title="Open configuration (classification vocabulary &amp; noise filtering)">Config</button>
+
   <!-- Header -->
   <header class="header">
     <p class="eyebrow">Document Retrieval &amp; Preprocessing</p>
     <h1>Dossier Search</h1>
     <p class="subtitle">Find dossiers by keyword, then preprocess</p>
     <nav class="page-nav">
-      <a class="btn btn-sm btn-outline" href="/legacy"
-        title="Original pipeline UI (Listen Folder + Run Full Pipeline)">Pipeline (legacy) &rsaquo;</a>
+      <a class="btn btn-sm btn-outline" href="/FileListener"
+        title="Original pipeline UI (Listen Folder + Run Full Pipeline)">File Listener &rsaquo;</a>
       <a class="btn btn-sm btn-outline" href="/html2pptx"
         title="Paste AI-generated HTML slide markup and convert it to a .pptx deck">HTML &rarr; PPTX &rsaquo;</a>
       <a class="btn btn-sm btn-outline" href="/svg2ppt"
@@ -145,9 +149,13 @@
       <div id="prep-result" class="hidden" style="margin-top:14px;">
         <p class="success" id="prep-result-text"></p>
         <div class="prep-actions">
-          <button class="btn btn-accent" id="btn-loreal-gpt" type="button"
-            title="Open the downstream AI client (L'Oréal GPT)">L'Oréal GPT</button>
-        </div>
+          <a class="btn btn-accent" id="btn-loreal-gpt" href="http://www.baidu.com" target="_blank" rel="noopener">
+          L'Oréal GPT
+          </a>
+          <a class="btn btn-accent btn-next-step" id="btn-svg2ppt" href="/svg2ppt"
+            title="Go to the SVG → PPT conversion page">
+            SVG → PPT
+          </a>
       </div>
     </section>
 
@@ -186,7 +194,82 @@
   </div>
 </div>
 
-<script src="/static/search-app.js?v=1"></script>
+<!-- ============ Configuration modal (full-screen, copied from File Listener) ============ -->
+<div id="config-modal" class="modal hidden">
+  <div class="modal-backdrop" id="config-modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <h3>Configuration</h3>
+      <button class="modal-close" id="config-modal-close" type="button" title="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- 1. Classification vocabulary (collapsible) -->
+      <div class="accordion" id="acc-classification">
+        <button class="accordion-head" type="button" id="acc-head-classification"
+          aria-expanded="false" aria-controls="acc-body-classification">
+          <span class="accordion-title">Classification vocabulary</span>
+          <span class="accordion-chevron">&#9662;</span>
+        </button>
+        <div class="accordion-body" id="acc-body-classification">
+          <p class="panel-hint">Classification frame: uses keywords from each document's first 1&ndash;2 pages to auto-sort it into CLINS / FE (Sensory) / CE.</p>
+          <div class="query-editor" data-type="CLINS">
+            <label>CLINS &mdash; Clinical</label>
+            <textarea id="profile-CLINS" rows="3"></textarea>
+          </div>
+          <div class="query-editor" data-type="FE">
+            <label>FE &mdash; Sensory</label>
+            <textarea id="profile-FE" rows="3"></textarea>
+          </div>
+          <div class="query-editor" data-type="CE">
+            <label>CE &mdash; Consumer Evaluation</label>
+            <textarea id="profile-CE" rows="3"></textarea>
+          </div>
+          <button class="btn btn-sm btn-outline" id="btn-save-profiles"
+            title="Write the edited classification anchors back to classify/*.txt">Save</button>
+        </div>
+      </div>
+
+      <!-- 2. Noise filtering (collapsible) -->
+      <div class="accordion" id="acc-noise">
+        <button class="accordion-head" type="button" id="acc-head-noise"
+          aria-expanded="false" aria-controls="acc-body-noise">
+          <span class="accordion-title">Noise Filtering</span>
+          <span class="accordion-chevron">&#9662;</span>
+        </button>
+        <div class="accordion-body" id="acc-body-noise">
+          <div class="noise-filter-title">
+            <span>Noise Filtering</span>
+            <span class="badge-on">always on</span>
+          </div>
+          <p class="noise-filter-desc">
+            Pages are <strong>kept by default</strong> and deleted only when provably noise.
+            <span class="muted">Veto terms rescue evidence-bearing pages; cover pages are always dropped. <em>Cover</em> = no table, no list, &lt;3 figures, largest font &ge;20pt, and &lt;60 chars.</span>
+          </p>
+
+          <div class="noise-section">
+            <div class="noise-section-title">Deleted noise types</div>
+            <div id="noise-cats" class="chip-row"></div>
+          </div>
+
+          <div class="noise-section">
+            <div class="noise-section-title">Query lexicon <span class="muted">(queries/query.txt)</span></div>
+            <div class="query-editor">
+              <label for="query-txt">Title Anchors + Table Features &rarr; veto terms (rescue evidence-bearing pages)</label>
+              <textarea id="query-txt" rows="10"></textarea>
+            </div>
+            <button class="btn btn-sm btn-outline" id="btn-save-query"
+              title="Write the edited query lexicon back to queries/query.txt">Save</button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/static/search-app.js?v=2"></script>
 
 </body>
 </html>

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -117,12 +118,17 @@ class LayoutEngine:
         self,
         template_path: str | Path | None = None,
         max_pages: int | None = None,
+        overrides: dict | None = None,
     ):
         if template_path is None:
             here = Path(__file__).parent
             template_path = here / "templates" / "deck_5region.json"
         self.template_path = Path(template_path)
         self.template = self._load_template()
+        # Apply debug/theme overrides to the in-memory template copy BEFORE
+        # building regions, so region geometry, padding, gap and chrome all
+        # reflect the requested look. This never touches the template file.
+        self._apply_overrides(overrides)
         self.regions = self._build_regions()
         self.routing = self.template["routing"]
         self.gap = float(self.template["stacking"]["default_gap"])
@@ -206,6 +212,93 @@ class LayoutEngine:
         if not self.template_path.exists():
             raise LayoutError(f"Template not found: {self.template_path}")
         return json.loads(self.template_path.read_text(encoding="utf-8"))
+
+    # ------------------------------------------------------------------
+    # Debug / theme overrides (in-memory only — template file is untouched)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _is_hex_color(value: str) -> bool:
+        return isinstance(value, str) and bool(
+            re.fullmatch(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?", value.strip())
+        )
+
+    def _apply_overrides(self, overrides: dict | None) -> None:
+        """Mutate ``self.template`` with debug/theme overrides.
+
+        Only *structural / theme* colors are mutable; the data-status palette
+        (green/orange/red/neutral) is intentionally left untouched so the
+        signal semantics survive. ``content_font_scale`` is applied per
+        component by DeckBuilder and is ignored here.
+        """
+        if not overrides:
+            return
+
+        theme_ov = overrides.get("theme_overrides") or {}
+        if isinstance(theme_ov, dict):
+            palette = self.template.setdefault("theme", {}).setdefault("palette", {})
+            chrome = self.template.setdefault("chrome", {})
+            regions = self.template.setdefault("regions", {})
+            # Each UI swatch maps to one or more template keys.
+            if self._is_hex_color(theme_ov.get("primary_accent", "")):
+                palette["primary_accent"] = theme_ov["primary_accent"]
+                chrome.setdefault("section_titles", {})["font_color"] = theme_ov[
+                    "primary_accent"
+                ]
+            if self._is_hex_color(theme_ov.get("header_background", "")):
+                palette["header_background"] = theme_ov["header_background"]
+                if "top_banner" in regions:
+                    regions["top_banner"]["background"] = theme_ov["header_background"]
+                if "meta_row" in regions:
+                    regions["meta_row"]["background"] = theme_ov["header_background"]
+            if self._is_hex_color(theme_ov.get("tab_background", "")):
+                palette["tab_background"] = theme_ov["tab_background"]
+                chrome.setdefault("side_tab", {})["background"] = theme_ov["tab_background"]
+            if self._is_hex_color(theme_ov.get("border_color", "")):
+                palette["border_color"] = theme_ov["border_color"]
+                chrome.setdefault("borders", {})["color"] = theme_ov["border_color"]
+            if self._is_hex_color(theme_ov.get("text_color", "")):
+                palette["text_color"] = theme_ov["text_color"]
+
+        # Chrome font scale (cosmetic only — does not change pagination).
+        cf = overrides.get("chrome_font_scale")
+        if cf not in (None, 1.0):
+            try:
+                cf = max(0.5, min(2.0, float(cf)))
+            except (TypeError, ValueError):
+                cf = None
+        if cf not in (None, 1.0):
+            typ = self.template["theme"].setdefault("typography", {})
+            for k in (
+                "base_font_size",
+                "table_font_size",
+                "title_font_size",
+                "section_title_font_size",
+            ):
+                if k in typ:
+                    typ[k] = round(typ[k] * cf, 3)
+            st = self.template["chrome"].setdefault("section_titles", {})
+            if "font_size" in st:
+                st["font_size"] = round(st["font_size"] * cf, 3)
+            stb = self.template["chrome"].setdefault("side_tab", {})
+            if "font_size" in stb:
+                stb["font_size"] = round(stb["font_size"] * cf, 3)
+
+        # Global margin scale: every region padding + the inter-component gap.
+        ms = overrides.get("margin_scale")
+        if ms not in (None, 1.0):
+            try:
+                ms = max(0.5, min(2.0, float(ms)))
+            except (TypeError, ValueError):
+                ms = None
+        if ms not in (None, 1.0):
+            for r in self.template["regions"].values():
+                pad = r.get("padding")
+                if pad:
+                    r["padding"] = [round(p * ms, 3) for p in pad]
+            self.template.setdefault("stacking", {})["default_gap"] = round(
+                float(self.template.get("stacking", {}).get("default_gap", 8)) * ms, 3
+            )
 
     def _build_regions(self) -> dict[str, Region]:
         regions: dict[str, Region] = {}

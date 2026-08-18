@@ -497,6 +497,152 @@ async function pollActivity() {
 }
 
 // =================================================================
+// Configuration modal (copied from the File Listener page)
+//   - classification vocabulary (classify/*.txt)
+//   - noise filtering (deleted noise types + veto terms)
+// =================================================================
+
+function setButtonLoading(btn, loading) {
+  if (loading) {
+    btn.dataset.originalText = btn.textContent;
+    btn.innerHTML = '<span class="spinner"></span>' + btn.dataset.originalText;
+    btn.disabled = true;
+  } else {
+    btn.textContent = btn.dataset.originalText || btn.textContent;
+    btn.disabled = false;
+  }
+}
+
+function bindConfigModal(rowId, modalId, onOpen) {
+  const row = document.getElementById(rowId);
+  const modal = document.getElementById(modalId);
+  if (!row || !modal) return;
+  const close = () => modal.classList.add("hidden");
+  const open = () => {
+    modal.classList.remove("hidden");
+    if (typeof onOpen === "function") onOpen();
+  };
+  row.addEventListener("click", open);
+  modal.querySelector(".modal-close").addEventListener("click", close);
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
+}
+bindConfigModal("btn-config", "config-modal", () => {
+  loadProfiles();
+  loadNoiseConfig();
+});
+
+// Config modal: collapsible accordion sections
+document.querySelectorAll(".accordion-head").forEach((head) => {
+  head.addEventListener("click", () => {
+    const acc = head.closest(".accordion");
+    const open = acc.classList.toggle("open");
+    head.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const m = document.getElementById("config-modal");
+  if (m && !m.classList.contains("hidden")) m.classList.add("hidden");
+});
+
+// --- Classification anchors (classify/*.txt) ---
+function getProfilesFromUI() {
+  return {
+    CLINS: $("#profile-CLINS").value.trim(),
+    FE: $("#profile-FE").value.trim(),
+    CE: $("#profile-CE").value.trim(),
+  };
+}
+
+async function loadProfiles() {
+  try {
+    const res = await fetch("/classify/profiles");
+    const data = await res.json();
+    if (data.ok && data.profiles) {
+      for (const [type, text] of Object.entries(data.profiles)) {
+        const el = document.getElementById(`profile-${type}`);
+        if (el) el.value = text;
+      }
+      log("Loaded classification anchors from classify/*.txt", "info");
+    }
+  } catch (err) {
+    log("Failed to load profiles: " + err.message, "warn");
+  }
+}
+
+$("#btn-save-profiles").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  setButtonLoading(btn, true);
+  try {
+    const res = await fetch("/classify/profiles/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profiles: getProfilesFromUI() }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      log(`Saved classification anchors: ${data.saved.join(", ")}`, "success");
+    } else {
+      log("Failed to save profiles: " + (data.detail || ""), "error");
+    }
+  } catch (err) {
+    log("Save profiles error: " + err.message, "error");
+  }
+  setButtonLoading(btn, false);
+});
+
+// --- Noise-based page filtering ---
+const noiseCats = $("#noise-cats");
+const queryTxt = $("#query-txt");
+
+async function loadNoiseConfig() {
+  try {
+    const [paramsRes, qRes] = await Promise.all([
+      fetch("/config/params"),
+      fetch("/queries"),
+    ]);
+    const params = await paramsRes.json();
+    const qData = await qRes.json();
+    if (params.ok) {
+      noiseCats.innerHTML = "";
+      (params.noise_categories || []).forEach(c => {
+        const cls = c.active ? "chip chip-on" : "chip chip-off";
+        noiseCats.insertAdjacentHTML("beforeend", `<span class="${cls}">${c.label}${c.active ? "" : " (off)"}</span>`);
+      });
+    }
+    if (qData.ok && qData.queries) {
+      const txt = qData.queries.CLINS || qData.queries.FE || qData.queries.CE || "";
+      queryTxt.value = txt;
+    }
+  } catch (err) {
+    // config params / queries are optional — ignore network errors silently
+  }
+}
+
+$("#btn-save-query").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  setButtonLoading(btn, true);
+  try {
+    const text = queryTxt.value;
+    const res = await fetch("/queries/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queries: { CLINS: text, FE: text, CE: text } }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      log("Saved query lexicon to queries/query.txt", "success");
+    } else {
+      log("Failed to save queries: " + (data.detail || ""), "error");
+    }
+  } catch (err) {
+    log("Save queries error: " + err.message, "error");
+  }
+  setButtonLoading(btn, false);
+});
+
+// =================================================================
 // Startup
 // =================================================================
 log("Dossier Search ready.", "info");

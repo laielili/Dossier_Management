@@ -1277,6 +1277,15 @@ body {
   gap: 10px;
 }
 
+/* Config button pinned to the top-right corner of the homepage */
+.config-corner {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 60;
+  box-shadow: var(--shadow-sm);
+}
+
 /* ===================== HTML → PPTX: code editor ===================== */
 .code-input {
   width: 100%;
