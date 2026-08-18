@@ -68,8 +68,10 @@ class Svg2PptxBuildRequest(BaseModel):
 
     # --- Debug / theme overrides (runtime only, never persisted) ---
     theme_overrides: dict = Field(default_factory=dict)   # structural/theme colors
-    chrome_font_scale: float = 1.0   # banner/section-title font multiplier
-    content_font_scale: float = 1.0  # component text multiplier (drives page count)
+    chrome_font_scale: float = 1.0   # banner/section-title font multiplier (region chrome)
+    title_font_scale: float = 1.0    # top_banner content (title/formula-ref) multiplier
+    meta_font_scale: float = 1.0     # meta_row content multiplier
+    content_font_scale: float = 1.0  # left/middle/right column content multiplier (drives pages)
     margin_scale: float = 1.0        # region padding + inter-component gap multiplier
 
 
@@ -130,6 +132,8 @@ async def svg2ppt_build(req: Svg2PptxBuildRequest):
             overrides={
                 "theme_overrides": req.theme_overrides or {},
                 "chrome_font_scale": req.chrome_font_scale,
+                "title_font_scale": req.title_font_scale,
+                "meta_font_scale": req.meta_font_scale,
                 "content_font_scale": req.content_font_scale,
                 "margin_scale": req.margin_scale,
             },

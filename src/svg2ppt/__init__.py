@@ -31,7 +31,9 @@ class DeckBuilder:
 
     ``overrides`` is a debug/theme dict applied at build time (never persisted):
       - theme_overrides, chrome_font_scale, margin_scale -> LayoutEngine (template)
-      - content_font_scale -> uniform scale of every component SVG (drives pages)
+      - title_font_scale   -> top_banner content (title / formula-ref)
+      - meta_font_scale    -> meta_row content
+      - content_font_scale -> left/middle/right column content (drives page count)
     """
 
     def __init__(
@@ -42,12 +44,22 @@ class DeckBuilder:
         overrides: dict | None = None,
     ):
         overrides = overrides or {}
-        # Content font scale is component-level; separate it from the layout
-        # overrides so LayoutEngine only sees template-level keys.
+        # Per-region content font scales are component-level; separate them from
+        # the layout overrides so LayoutEngine only sees template-level keys.
+        self.title_font_scale = self._clamp_scale(
+            overrides.get("title_font_scale", 1.0)
+        )
+        self.meta_font_scale = self._clamp_scale(
+            overrides.get("meta_font_scale", 1.0)
+        )
         self.content_font_scale = self._clamp_scale(
             overrides.get("content_font_scale", 1.0)
         )
-        layout_overrides = {k: v for k, v in overrides.items() if k != "content_font_scale"}
+        layout_overrides = {
+            k: v
+            for k, v in overrides.items()
+            if k not in ("title_font_scale", "meta_font_scale", "content_font_scale")
+        }
         self.layout_engine = LayoutEngine(
             template_path, max_pages=max_pages, overrides=layout_overrides
         )
@@ -61,11 +73,30 @@ class DeckBuilder:
             return 1.0
 
     def _apply_content_scale(self, deck: DeckXML) -> None:
-        """Scale every component's SVG uniformly (font-size + geometry)."""
-        if self.content_font_scale == 1.0:
-            return
+        """Scale each component's SVG by its routed region's font module.
+
+        top_banner -> title_font_scale, meta_row -> meta_font_scale, the three
+        columns (left/middle/right) -> content_font_scale. Only components whose
+        module scale differs from 1.0 are rewritten (1.0 is a no-op).
+        """
+        regions = self.layout_engine.regions
+        routing = self.layout_engine.routing
+        overflow = self.layout_engine.overflow_region
+        scale_by_region = {
+            "top_banner": self.title_font_scale,
+            "meta_row": self.meta_font_scale,
+        }
         for comp in deck.components:
-            comp.svg = scale_svg_fonts(comp.svg, self.content_font_scale)
+            region = comp.attrs.get("region")
+            if region not in regions:
+                region = routing.get(comp.type, overflow)
+            scale = scale_by_region.get(region, self.content_font_scale)
+            if comp.type == "description":
+                # The banner description shares the meta_row font module so a
+                # meta_font_scale adjustment affects both.
+                scale = self.meta_font_scale
+            if scale != 1.0:
+                comp.svg = scale_svg_fonts(comp.svg, scale)
 
     def build_from_string(
         self,

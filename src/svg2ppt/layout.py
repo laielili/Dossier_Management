@@ -41,6 +41,11 @@ from .schema import Component, scale_svg_fonts, svg_natural_size
 # pages are returned with a warning (not silently overflowing, not an error).
 FONT_FLOOR = 0.15
 
+# The `description` component is laid out horizontally inside the top banner:
+# it occupies this share of the banner content width, right-aligned, with the
+# chrome divider drawn at its left edge (1 - DESCRIPTION_REGION_RATIO).
+DESCRIPTION_REGION_RATIO = 0.44
+
 
 class LayoutError(ValueError):
     """Raised when components cannot be laid out under the template rules."""
@@ -132,6 +137,8 @@ class LayoutEngine:
         self.regions = self._build_regions()
         self.routing = self.template["routing"]
         self.gap = float(self.template["stacking"]["default_gap"])
+        self.label_cfg = self.template.get("chrome", {}).get("component_labels", {})
+        self.labels_enabled = bool(self.label_cfg.get("enabled", True))
         # Template provides the defaults; callers may override per build.
         self.max_pages = self.template["stacking"].get("max_pages")
         if max_pages is not None:
@@ -245,6 +252,9 @@ class LayoutEngine:
                 chrome.setdefault("section_titles", {})["font_color"] = theme_ov[
                     "primary_accent"
                 ]
+                chrome.setdefault("component_labels", {})["font_color"] = theme_ov[
+                    "primary_accent"
+                ]
             if self._is_hex_color(theme_ov.get("header_background", "")):
                 palette["header_background"] = theme_ov["header_background"]
                 if "top_banner" in regions:
@@ -280,6 +290,9 @@ class LayoutEngine:
             st = self.template["chrome"].setdefault("section_titles", {})
             if "font_size" in st:
                 st["font_size"] = round(st["font_size"] * cf, 3)
+            cl = self.template["chrome"].setdefault("component_labels", {})
+            if "font_size" in cl:
+                cl["font_size"] = round(cl["font_size"] * cf, 3)
             stb = self.template["chrome"].setdefault("side_tab", {})
             if "font_size" in stb:
                 stb["font_size"] = round(stb["font_size"] * cf, 3)
@@ -359,11 +372,36 @@ class LayoutEngine:
         )
 
     def _component_size(self, comp: Component, target_width: float) -> tuple[float, float]:
-        """Return (width, height) for a component filling ``target_width``."""
+        """Return (width, height) for a component filling ``target_width``.
+
+        A ``description`` fills only the right share of the banner width
+        (``DESCRIPTION_REGION_RATIO``) and is placed beside the stacked
+        title/formula-ref. A component with a ``label`` reserves an extra title
+        line (rendered by the renderer above its SVG) on top of its natural
+        aspect height.
+        """
         w, h = svg_natural_size(comp.svg)
         if w <= 0 or h <= 0:
             return target_width, 10.0
-        return target_width, target_width * (h / w)
+        if comp.type == "description":
+            width = target_width * DESCRIPTION_REGION_RATIO
+            return width, width * (h / w)
+        height = target_width * (h / w)
+        if comp.label:
+            height += self._label_height(1.0)
+        return target_width, height
+
+    def _label_height(self, f: float = 1.0) -> float:
+        """Height of the engine-rendered label title line (design units).
+
+        Scales with the density factor ``f`` so the compression path keeps the
+        label line proportional to the shrunk content.
+        """
+        if not self.labels_enabled:
+            return 0.0
+        fs = float(self.label_cfg.get("font_size", 11)) * f
+        gap = float(self.label_cfg.get("gap", 3)) * f
+        return fs + gap
 
     # ------------------------------------------------------------------
     # Page building
@@ -382,8 +420,29 @@ class LayoutEngine:
             items = sized.get(region_name, [])
             # Only the overflow region is allowed to tighten its gap.
             gap = gap_override if region_name == self.overflow_region else None
-            placed, leftover = self._fit_items(region, items, gap)
-            page.components[region_name] = placed
+
+            # The top banner stacks title/formula-ref vertically on the left
+            # and places any `description` component right-aligned beside them,
+            # vertically centered — reusing the banner's horizontal whitespace.
+            if region_name == "top_banner":
+                desc_items = [it for it in items if it[0].type == "description"]
+                other_items = [it for it in items if it[0].type != "description"]
+                placed, leftover = self._fit_items(region, other_items, gap)
+                page.components[region_name] = placed
+                for comp, dw, dh in desc_items:
+                    page.components[region_name].append(
+                        PlacedComponent(
+                            component=comp,
+                            region=region_name,
+                            x=region.inner_x + region.inner_w - dw,
+                            y=region.content_y + (region.content_h - dh) / 2.0,
+                            w=dw,
+                            h=dh,
+                        )
+                    )
+            else:
+                placed, leftover = self._fit_items(region, items, gap)
+                page.components[region_name] = placed
             unconsumed[region_name] = leftover
 
             # Repeat-region overflow is a hard error: content must fit page 1 unchanged.
@@ -558,6 +617,8 @@ class LayoutEngine:
         w0, h0 = svg_natural_size(new_svg)
         width = region.inner_w
         height = width * (h0 / w0) if w0 > 0 else 10.0
+        if comp.label:
+            height += self._label_height(f)
         return width, height, new_svg
 
     # ------------------------------------------------------------------

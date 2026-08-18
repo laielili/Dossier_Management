@@ -184,10 +184,6 @@
             <label for="ov-border">Border</label>
             <input type="color" id="ov-border" value="#d9a441">
           </div>
-          <div class="form-row">
-            <label for="ov-text">Text</label>
-            <input type="color" id="ov-text" value="#333333">
-          </div>
         </div>
       </div>
 
@@ -198,22 +194,31 @@
         </button>
         <div class="collapsible-content">
           <div class="form-row">
-            <label for="ov-chrome-font">Chrome font</label>
+            <label for="ov-title-font">Title</label>
             <div class="folder-input-group">
-              <input type="range" id="ov-chrome-font" min="0.5" max="2.0" value="1.0" step="0.1">
-              <span class="param-status" id="ov-chrome-font-val">1.0×</span>
+              <input type="range" id="ov-title-font" min="0.5" max="2.0" value="1.0" step="0.1">
+              <span class="param-status" id="ov-title-font-val">1.0×</span>
             </div>
           </div>
-          <p class="hint param-hint">Banner / section-title / side-tab font size (cosmetic, does not change page count).</p>
+          <p class="hint param-hint">Top banner deck title (title / formula-ref).</p>
 
           <div class="form-row">
-            <label for="ov-content-font">Content font</label>
+            <label for="ov-meta-font">Meta row</label>
+            <div class="folder-input-group">
+              <input type="range" id="ov-meta-font" min="0.5" max="2.0" value="1.0" step="0.1">
+              <span class="param-status" id="ov-meta-font-val">1.0×</span>
+            </div>
+          </div>
+          <p class="hint param-hint">Meta row text size.</p>
+
+          <div class="form-row">
+            <label for="ov-content-font">Columns</label>
             <div class="folder-input-group">
               <input type="range" id="ov-content-font" min="0.5" max="2.0" value="1.0" step="0.1">
               <span class="param-status" id="ov-content-font-val">1.0×</span>
             </div>
           </div>
-          <p class="hint param-hint">Table / card text size. Larger → content grows → <strong>more pages</strong>; smaller → fewer pages.</p>
+          <p class="hint param-hint">Left / middle / right column text</p>
         </div>
       </div>
     </div>

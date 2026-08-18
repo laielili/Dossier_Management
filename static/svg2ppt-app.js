@@ -28,9 +28,10 @@
   const ovHeaderBg = $("ov-header-bg");
   const ovTabBg = $("ov-tab-bg");
   const ovBorder = $("ov-border");
-  const ovText = $("ov-text");
-  const ovChromeFont = $("ov-chrome-font");
-  const ovChromeFontVal = $("ov-chrome-font-val");
+  const ovTitleFont = $("ov-title-font");
+  const ovTitleFontVal = $("ov-title-font-val");
+  const ovMetaFont = $("ov-meta-font");
+  const ovMetaFontVal = $("ov-meta-font-val");
   const ovContentFont = $("ov-content-font");
   const ovContentFontVal = $("ov-content-font-val");
   const ovMargin = $("ov-margin");
@@ -47,7 +48,6 @@
     header_background: "#e8c580",
     tab_background: "#b8860b",
     border_color: "#d9a441",
-    text_color: "#333333",
   };
   const PRESET_KEY = "svg2ppt_presets";
 
@@ -245,9 +245,9 @@
         header_background: ovHeaderBg.value,
         tab_background: ovTabBg.value,
         border_color: ovBorder.value,
-        text_color: ovText.value,
       },
-      chrome_font_scale: parseFloat(ovChromeFont.value) || 1.0,
+      title_font_scale: parseFloat(ovTitleFont.value) || 1.0,
+      meta_font_scale: parseFloat(ovMetaFont.value) || 1.0,
       content_font_scale: parseFloat(ovContentFont.value) || 1.0,
       margin_scale: parseFloat(ovMargin.value) || 1.0,
     };
@@ -300,10 +300,11 @@
     }
     el.addEventListener("change", scheduleRerender);
   }
-  bindScaleControl(ovChromeFont, ovChromeFontVal);
+  bindScaleControl(ovTitleFont, ovTitleFontVal);
+  bindScaleControl(ovMetaFont, ovMetaFontVal);
   bindScaleControl(ovContentFont, ovContentFontVal);
   bindScaleControl(ovMargin, ovMarginVal);
-  [ovAccent, ovHeaderBg, ovTabBg, ovBorder, ovText].forEach((el) =>
+  [ovAccent, ovHeaderBg, ovTabBg, ovBorder].forEach((el) =>
     el.addEventListener("change", scheduleRerender)
   );
   $("dpi").addEventListener("change", scheduleRerender);
@@ -364,11 +365,12 @@
     ovHeaderBg.value = tov.header_background || THEME_DEFAULTS.header_background;
     ovTabBg.value = tov.tab_background || THEME_DEFAULTS.tab_background;
     ovBorder.value = tov.border_color || THEME_DEFAULTS.border_color;
-    ovText.value = tov.text_color || THEME_DEFAULTS.text_color;
-    ovChromeFont.value = p.chrome_font_scale || 1.0;
+    ovTitleFont.value = p.title_font_scale || 1.0;
+    ovMetaFont.value = p.meta_font_scale || 1.0;
     ovContentFont.value = p.content_font_scale || 1.0;
     ovMargin.value = p.margin_scale || 1.0;
-    ovChromeFontVal.textContent = parseFloat(ovChromeFont.value).toFixed(1) + "×";
+    ovTitleFontVal.textContent = parseFloat(ovTitleFont.value).toFixed(1) + "×";
+    ovMetaFontVal.textContent = parseFloat(ovMetaFont.value).toFixed(1) + "×";
     ovContentFontVal.textContent = parseFloat(ovContentFont.value).toFixed(1) + "×";
     ovMarginVal.textContent = parseFloat(ovMargin.value).toFixed(1) + "×";
     scheduleRerender();

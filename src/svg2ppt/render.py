@@ -110,12 +110,16 @@ class DeckRenderer:
         # 2. Components per region.
         for region_name in self.layout.regions:
             for placed in page.components.get(region_name, []):
+                x, y, w, h = self._placed_rect_px(placed)
+                if placed.component.label and self.layout.labels_enabled:
+                    label_img = self._label_to_image(placed.component.label, w)
+                    lh_px = label_img.height
+                    canvas.paste(label_img, (x, y), label_img)
+                    y += lh_px
+                    h -= lh_px
                 comp_img = self._svg_to_image(placed.component.svg)
-                target_box = self._placed_rect_px(placed)
-                comp_img = comp_img.resize(
-                    (target_box[2], target_box[3]), Image.LANCZOS
-                )
-                canvas.paste(comp_img, (target_box[0], target_box[1]), comp_img)
+                comp_img = comp_img.resize((w, h), Image.LANCZOS)
+                canvas.paste(comp_img, (x, y), comp_img)
 
         # Convert to RGB before saving (PPTX readers prefer RGB PNG).
         canvas.convert("RGB").save(str(png_path), "PNG")
@@ -137,6 +141,28 @@ class DeckRenderer:
         except Exception as exc:
             raise RenderError(f"Failed to render SVG to image: {exc}") from exc
 
+    def _label_to_image(self, label: str, width_px: int) -> Image.Image:
+        """Render a component's label title line (transparent background)."""
+        cfg = self.layout.label_cfg
+        fs = float(cfg.get("font_size", 11))
+        gap = float(cfg.get("gap", 3))
+        color = cfg.get("font_color", self.palette["primary_accent"])
+        weight = cfg.get("font_weight", "bold")
+        family = self.theme["typography"]["font_family"]
+        lh = fs + gap
+        height_px = int(round(lh * self.px_per_unit))
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width_px}" '
+            f'height="{height_px}" viewBox="0 0 {width_px} {lh}" '
+            f'font-family="{family}">'
+            f'<text x="2" y="{fs - 1:.1f}" font-size="{fs}" fill="{color}" '
+            f'font-weight="{weight}">{html.escape(label)}</text></svg>'
+        )
+        img = self._svg_to_image(svg)
+        if img.size != (width_px, height_px):
+            img = img.resize((width_px, height_px), Image.LANCZOS)
+        return img
+
     # ------------------------------------------------------------------
     # Chrome SVG
     # ------------------------------------------------------------------
@@ -150,6 +176,19 @@ class DeckRenderer:
         )
 
         regions = self.layout.regions
+
+        # Top-banner divider: separates the stacked title/formula-ref (left)
+        # from the right-aligned `description` line.
+        div = self.chrome.get("top_banner_divider", {})
+        if div.get("enabled") and "top_banner" in regions:
+            tb = regions["top_banner"]
+            dx = tb.inner_x + round(float(div.get("x_ratio", 0.56)) * tb.inner_w, 2)
+            parts.append(
+                f'<line x1="{dx}" y1="{tb.y + float(div.get("y_top", 8))}" '
+                f'x2="{dx}" y2="{tb.y + float(div.get("y_bottom", 62))}" '
+                f'stroke="{div.get("color", self.palette["border_color"])}" '
+                f'stroke-width="{float(div.get("stroke_width", 1))}"/>'
+            )
 
         # Background fills for banner / meta row / side tab.
         for name in ("top_banner", "meta_row"):
