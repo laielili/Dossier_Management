@@ -62,6 +62,15 @@
   .collapsible-content .form-row { margin-bottom: 0; }
   .collapsible-content .form-row label { min-width: 80px; }
   .collapsible-content .param-hint { margin-bottom: 0; }
+
+  /* Output-mode radio group inside Options */
+  .output-mode-group {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .output-mode-group .checkbox-inline { font-size: 14px; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -121,6 +130,21 @@
         <span class="suffix-tag">.pptx</span>
       </div>
     </div>
+
+    <div class="form-row">
+      <label>Output mode</label>
+      <div class="output-mode-group">
+        <label class="checkbox-inline" title="Component groups with editable text overlays — text and components stay selectable in PowerPoint (experimental)">
+          <input type="radio" name="output-mode" value="editable" checked>
+          Editable (Beta)
+        </label>
+        <label class="checkbox-inline" title="Each slide is one full-page image — pixel-perfect, nothing editable">
+          <input type="radio" name="output-mode" value="classic">
+          Classic (image)
+        </label>
+      </div>
+    </div>
+    <p class="hint param-hint"><strong>Editable (Beta)</strong>: each component becomes a draggable group with editable text on top of the raster layer. <strong>Classic (image)</strong>: the legacy one-image-per-slide output.</p>
 
     <div class="button-row" style="margin-top:14px;">
       <button class="btn btn-accent btn-run-all" id="btn-build" type="button"
@@ -200,7 +224,6 @@
               <span class="param-status" id="ov-title-font-val">1.0×</span>
             </div>
           </div>
-          <p class="hint param-hint">Top banner deck title (title / formula-ref).</p>
 
           <div class="form-row">
             <label for="ov-meta-font">Meta row</label>
@@ -209,7 +232,6 @@
               <span class="param-status" id="ov-meta-font-val">1.0×</span>
             </div>
           </div>
-          <p class="hint param-hint">Meta row text size.</p>
 
           <div class="form-row">
             <label for="ov-left-font">Left tab</label>
@@ -218,7 +240,6 @@
               <span class="param-status" id="ov-left-font-val">1.0×</span>
             </div>
           </div>
-          <p class="hint param-hint">Left tab (Project Details cards).</p>
 
           <div class="form-row">
             <label for="ov-mid-font">Middle tab</label>
@@ -227,8 +248,7 @@
               <span class="param-status" id="ov-mid-font-val">1.0×</span>
             </div>
           </div>
-          <p class="hint param-hint">Middle tab (efficacy tables) — larger text → <strong>more pages</strong>.</p>
-
+          
           <div class="form-row">
             <label for="ov-right-font">Right tab</label>
             <div class="folder-input-group">
@@ -236,7 +256,6 @@
               <span class="param-status" id="ov-right-font-val">1.0×</span>
             </div>
           </div>
-          <p class="hint param-hint">Right tab (Communication claims + Performance Summary).</p>
         </div>
       </div>
     </div>
@@ -299,7 +318,7 @@
 
 </div>
 
-<script src="/static/svg2ppt-app.js?v=3"></script>
+<script src="/static/svg2ppt-app.js?v=4"></script>
 
 </body>
 </html>

@@ -42,8 +42,10 @@ class DeckBuilder:
         dpi: int = 150,
         max_pages: int | None = None,
         overrides: dict | None = None,
+        editable: bool = True,
     ):
         overrides = overrides or {}
+        self.editable = editable
         # Per-region content font scales are component-level; separate them from
         # the layout overrides so LayoutEngine only sees template-level keys.
         self.title_font_scale = self._clamp_scale(
@@ -90,7 +92,6 @@ class DeckBuilder:
             return max(lo, min(hi, float(value)))
         except (TypeError, ValueError):
             return 1.0
-
     def _apply_content_scale(self, deck: DeckXML) -> None:
         """Scale each component's SVG by its routed region's font module.
 
@@ -130,7 +131,9 @@ class DeckBuilder:
         deck = DeckXML.from_string(xml_text)
         self._apply_content_scale(deck)
         pages = self.layout_engine.layout(deck.components)
-        return self.renderer.render(pages, output_dir, filename=filename)
+        return self.renderer.render(
+            pages, output_dir, filename=filename, editable=self.editable
+        )
 
     def build_from_file(
         self,
@@ -141,7 +144,9 @@ class DeckBuilder:
         deck = DeckXML.from_file(xml_path)
         self._apply_content_scale(deck)
         pages = self.layout_engine.layout(deck.components)
-        return self.renderer.render(pages, output_dir, filename=filename)
+        return self.renderer.render(
+            pages, output_dir, filename=filename, editable=self.editable
+        )
 
 
 __all__ = [

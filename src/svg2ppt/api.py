@@ -65,6 +65,7 @@ class Svg2PptxBuildRequest(BaseModel):
     max_pages: int = 0          # 0 => no cap (add-pages); >0 => hard cap, compress to fit
     dpi: int = 150              # render resolution for the raster deck
     theme: str = "loreal"       # reserved for future multi-template support
+    editable: bool = False      # True => editable deck (component groups + text overlays, Beta)
 
     # --- Debug / theme overrides (runtime only, never persisted) ---
     theme_overrides: dict = Field(default_factory=dict)   # structural/theme colors
@@ -132,6 +133,7 @@ async def svg2ppt_build(req: Svg2PptxBuildRequest):
             template_path=None,
             dpi=dpi,
             max_pages=req.max_pages,
+            editable=req.editable,
             overrides={
                 "theme_overrides": req.theme_overrides or {},
                 "chrome_font_scale": req.chrome_font_scale,

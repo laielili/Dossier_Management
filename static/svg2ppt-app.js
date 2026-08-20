@@ -22,6 +22,18 @@
   const previewStrip = $("preview-strip");
   const btnPreviewHide = $("btn-preview-hide");
 
+  // ---- Output mode (editable Beta / classic single-image) ----
+  const modeEditable = document.querySelector(
+    'input[name="output-mode"][value="editable"]'
+  );
+  const modeClassic = document.querySelector(
+    'input[name="output-mode"][value="classic"]'
+  );
+
+  function currentEditable() {
+    return !!(modeEditable && modeEditable.checked);
+  }
+
   // ---- Debug / theme override controls ----
   const debugCard = $("debug-card");
   const ovAccent = $("ov-accent");
@@ -133,6 +145,7 @@ const ovRightFontVal = $("ov-right-font-val");
       filename: $("file-name").value.trim() || "synthesis_deck",
       max_pages: parseInt(maxPages.value, 10) || 0,
       dpi: parseInt($("dpi").value, 10) || 150,
+      editable: currentEditable(),
     };
 
     resultCard.classList.add("hidden");
@@ -161,6 +174,7 @@ const ovRightFontVal = $("ov-right-font-val");
         filename: payload.filename,
         max_pages: payload.max_pages,
         dpi: payload.dpi,
+        editable: payload.editable,
       };
       applyBuildResult(data);
       debugCard.classList.remove("hidden");
@@ -269,6 +283,7 @@ const ovRightFontVal = $("ov-right-font-val");
       filename: lastBuild.filename,
       max_pages: parseInt(maxPages.value, 10) || 0,
       dpi: parseInt($("dpi").value, 10) || 150,
+      editable: currentEditable(),
       ...collectOverrides(),
     };
     log("Re-rendering with overrides…");

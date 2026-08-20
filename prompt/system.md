@@ -1,4 +1,4 @@
-py main.py 
+py main.py
 
 # Dossier Management — Companion System Prompt
 
@@ -93,10 +93,9 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
     "project_name": "string (Name representing the target_formula, e.g.'P-TIOX')",
     "project_type":"string, test methodologies, e.g. DEV - development",
     "target_formula": "string (Extract TARGET formula number or sponsor code, e.g. '774715 21'; null if not found)",
-    "comparator_formulas": ["string (Other formula numbers appearing as comparators / controls; empty array if none)"],
     "target_audience": "string (e.g., 'Female, 25-55 y.o., all skin types including sensitive, anti-aging needs')",
     "communication_claims": ["string (e.g., 'Inspired by BOTOX', 'Treats areas Botox cannot reach')"],
-    "formulation_info": "string (Any mentioned active ingredients/textures. e.g., '2% SYN-AKE', 'Milky lotion'. null if none.)",
+    "formulation_info": ["string (Any mentioned active ingredients/textures. e.g., '2% SYN-AKE', 'Milky lotion'. null if none.)"],
     "fragrance_info": "string (Formulation level fragrance details. null if not found)",
     "packaging_info": "string (describe the package, e.g., glass dropper bottle 30ml; null if packaging inference is absent)",
     "environmental_sustainability": "string (null if environmental sustainability metrics are absent)",
@@ -116,14 +115,17 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
     "sensory_studies_detected": [
       {
         "study_name": "string",
+        "study_context": "string",
         "metrics_tested": [
-          "string"
+          "string" 
         ]
       }
     ],
     "consumer_studies_detected": [
       {
         "study_name": "string",
+        "study_context": "string",
+        "comparator_formulas": "string",
         "metrics_tested": [
           "string (e.g., 'Skin feels smoother', 'Product is easy to apply')"
         ]
@@ -143,6 +145,8 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
         {
           "study_name": "string (Must match exactly from data_discovery_index)",
           "study_type": "CLINS",
+          "study_context": "string (1-2 sentences, describe study context briefly. e.g., N = ?, who are the audience, etc.)",
+          "comparator_formulas": "string (Other formula numbers appearing as comparators / controls; empty array if none)",
           "instrument_name":"string (null if not applicable. e.g., 'Corneometer', 'Tewameter', 'Primos', 'UC22')",
           "metric_name": "string (Must match exactly from metrics_tested, e.g., 'Skin hydration', 'Thickness of dermis')",
           "timepoints_data": [
@@ -165,6 +169,8 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
         {
           "study_name": "string",
           "study_type":"FE",
+          "study_context": "string",
+          "comparator_formulas": "string",
           "metric_name": "string)",
           "timepoints_data": [
             {
@@ -185,6 +191,9 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
       "results": [
         {
           "study_name": "string",
+          "study_context": "string",
+          "comparator_formulas": "string",
+          "study_type": "CE",
           "metric_name": "string (Must be the specific claim, e.g., 'Skin looks firmer')",
           "timepoints_data": [
             {
@@ -227,7 +236,7 @@ Output ONLY the `<deck>` XML — no conversational text, no markdown fences, bef
 ```xml
 <deck project="<JSON.project_info.project_name>" theme="loreal">
   <component type="title"><svg viewBox="0 0 1000 22" width="1000" height="22"><text x="0" y="18" font-size="18" font-weight="bold" fill="#333">P-TIOX</text></svg></component>
-  <component type="formula-ref"><svg viewBox="0 0 1000 14" width="1000" height="14"><text x="0" y="11" font-size="11" fill="#c8860d">774715 21 vs Comp-A</text></svg></component>
+  <component type="formula-ref"><svg viewBox="0 0 1000 14" width="1000" height="14"><text x="0" y="11" font-size="11" fill="#c8860d">774715 21</text></svg></component>
   <component type="description"><svg viewBox="0 0 440 20" width="440" height="20"><text x="12" y="14" font-size="8" fill="#333">A hydrating serum that visibly reduces wrinkles</text></svg></component>
   <component type="meta"><svg viewBox="0 0 1000 16" width="1000" height="16"><text x="0" y="12" font-size="8" fill="#333"><tspan font-weight="bold">Project Type: </tspan>DEV<tspan font-weight="bold"> · Audience: </tspan>Female, 25-55 y.o., all skin types including sensitive</text></svg></component>
   <component type="meta" region="right_column" label="Communication"><svg viewBox="0 0 380 68" width="380" height="68"><text x="12" y="16" font-size="12" fill="#333">• Inspired by BOTOX</text><text x="12" y="36" font-size="12" fill="#333">• Treats areas Botox cannot reach</text><text x="12" y="56" font-size="12" fill="#333">• Visible results in 4 weeks</text></svg></component>
@@ -243,33 +252,33 @@ Output ONLY the `<deck>` XML — no conversational text, no markdown fences, bef
 
 **Component → region routing** (engine-enforced; you only choose `type`). `type` is the primary key — use it to route, then pull the per-field generation rules from the YAML **Field Output Map** below.
 
-| `type`                   | region        | content (from JSON)                                                               | Field detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| -------------------------- | ------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `title`                  | top_banner    | `project_info.project_name`                                                     | `PROJECT_INFO` → `project_name`. Text starts at `x=0` — the banner's right side belongs to `description`.                                                                                                                                                                                                                                                                                                                                                              |
-| `formula-ref`            | top_banner    | `target_formula` + `comparator_formulas`                                      | `PROJECT_INFO` → `target_formula`, `comparator_formulas`. Text starts at `x=0`.                                                                                                                                                                                                                                                                                                                                                                                         |
-| `description`            | top_banner    | one-sentence project theme (AI-authored,**8–10 words, free paraphrase**)  | Own the project with a short, neutral sentence (e.g. "A hydrating serum that visibly reduces wrinkles"). Do not invent numbers; keep it qualitative. **Strictly ONE line** (≤ ~55 characters at width 440 — if it overflows, compress the wording, never wrap). The engine lays this line out**right-aligned on the same banner row** as `title` (separated by a divider line, vertically centered, ~44% banner width) — the component itself renders as plain text, no card, no label. Font-size matches the `meta` module (e.g. `8`), see SVG rule 10. |
+| `type`                   | region                  | content (from JSON)                                                                          | Field detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | ----------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`                  | top_banner              | `project_info.project_name`                                                                | `PROJECT_INFO` → `project_name`. Text starts at `x=0` — the banner's right side belongs to `description`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `formula-ref`            | top_banner              | `target_formula` (comparators live per-study, in each `efficacy-table` header)                                                 | `PROJECT_INFO` → `target_formula`. Comparator info is now **per-study** (no project-level field) — it renders inside each `efficacy-table` header, not here. Text starts at `x=0`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `description`            | top_banner              | one-sentence project theme (AI-authored,**8–10 words, free paraphrase**)              | Own the project with a short, neutral sentence (e.g. "A hydrating serum that visibly reduces wrinkles"). Do not invent numbers; keep it qualitative.**Strictly ONE line** (≤ ~55 characters at width 440 — if it overflows, compress the wording, never wrap). The engine lays this line out**right-aligned on the same banner row** as `title` (separated by a divider line, vertically centered, ~44% banner width) — the component itself renders as plain text, no card, no label. Font-size matches the `meta` module (e.g. `8`), see SVG rule 10.                                                                                                                                 |
 | `meta`                   | meta_row / right_column | `project_type` + `target_audience` (meta_row) · `communication_claims` (right_column) | **Two components share this `type`.** ① In `meta_row` (routing default, exactly 1): `PROJECT_INFO` → `project_type`, `target_audience` — **no `label`**, rendered on **ONE line**: `Project Type: <value> · Audience: <value>` with the field names bolded (e.g. `<tspan font-weight="bold">Project Type: </tspan>DEV<tspan font-weight="bold"> · Audience: </tspan>Female, 25-55 y.o., ...`), viewBox `1000×16`. ② In `right_column` (add **`region="right_column"`** + **`label="Communication"`**, exactly 1): `PROJECT_DETAIL` → `communication_claims` — one bullet **`• `** per claim, max 4 lines, viewBox height ≤ ~80. |
-| `info-card` (`label=`) | left_column   | one card per field: Formulation / Fragrance / Packaging / Sustainability / Safety | `PROJECT_DETAIL` → `formulation_info`, `fragrance_info`, `packaging_info`, `sustainability`, `safety`. **`label` REQUIRED** — the engine renders it as the card title line; the SVG text carries the value only.                                                                                                                                                                                                                                           |
-| `efficacy-table`         | middle_column | one per CLINS/FE study,**all** metrics                                      | `CONVICTION_PERFORMANCE` → `measured_efficacy`                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `consumer-block`         | middle_column | CONSUMER_PERFORMANCE                                                              | `CONSUMER_PERCEPTION`                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `summary-block`          | right_column  | `performance_summary` (AI-authored)                                             | `PROJECT_DETAIL` → `performance_summary`. **`label="Performance Summary"` REQUIRED** — the engine renders it as the card title line.                                                                                                                                                                                                                                                                                                                               |
-| `custom` (`region=`)   | escape hatch  | anything that does not fit the above                                              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `info-card` (`label=`) | left_column             | one card per field: Formulation / Fragrance / Packaging / Sustainability / Safety            | `PROJECT_DETAIL` → `formulation_info`, `fragrance_info`, `packaging_info`, `sustainability`, `safety`. **`label` REQUIRED** — the engine renders it as the card title line; the SVG text carries the value only. Array-valued fields (e.g. `formulation_info`) render item-by-item, joined with ` · `.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `efficacy-table`         | middle_column           | one per CLINS/FE study,**all** metrics                                                 | `CONVICTION_PERFORMANCE` → `measured_efficacy`. Table subtitle = JSON `study_name`, with `study_context` in parentheses when present (e.g. `China T12W clinical test (N=42, female 25-55)`); render the study's own `comparator_formulas` in the table header (e.g. `vs Comp-A`) when non-empty.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `consumer-block`         | middle_column           | CONSUMER_PERFORMANCE                                                                         | `CONSUMER_PERCEPTION`. The block header shows the CE study's `study_context` and `comparator_formulas` when present.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `summary-block`          | right_column            | `performance_summary` (AI-authored)                                                        | `PROJECT_DETAIL` → `performance_summary`. **`label="Performance Summary"` REQUIRED** — the engine renders it as the card title line.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `custom` (`region=`)   | escape hatch            | anything that does not fit the above                                                         | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ### Component cardinality (how many components to emit per `type`)
 
 Each `<component>` carries exactly ONE `<svg>` (see SVG authoring rules). Beyond that, emit the right NUMBER of components per `type` — the engine stacks and paginates them; it does NOT merge or split them for you.
 
-| `type`           | # components                             | rule                                                                                                                                                 |
-| ------------------ | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `title`          | **exactly 1**                      | the project name                                                                                                                                     |
-| `formula-ref`    | **exactly 1**                      | target formula + comparator(s)                                                                                                                       |
-| `description`    | **exactly 1**                      | one-sentence project theme (8–10 words, strictly one line)                                                                                         |
-| `meta`           | **exactly 2**                     | ① meta_row: Project Type + Audience on one line (no label) · ② right_column claims block: `region="right_column"` + `label="Communication"`, one bullet per claim, ≤ 4 lines |
-| `info-card`      | **1 per `label`**                | 5 cards: Formulation / Fragrance / Packaging / Sustainability / Safety                                                                               |
-| `summary-block`  | **exactly 1**                      | right-column summary                                                                                                                                 |
-| `efficacy-table` | **1 per study/report**             | N studies ⇒ N components; if one study is very long, split it into further`efficacy-table` components (e.g. `Study A (1/2)`, `Study A (2/2)`) |
-| `consumer-block` | **1 per consumer-perception test** | N tests ⇒ N components                                                                                                                              |
-| `custom`         | escape hatch                             | only when no`type` fits                                                                                                                            |
+| `type`           | # components                             | rule                                                                                                                                                                                |
+| ------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `title`          | **exactly 1**                      | the project name                                                                                                                                                                    |
+| `formula-ref`    | **exactly 1**                      | target formula (comparators render per-study, inside each `efficacy-table` / `consumer-block` header)                                                                                                                                                      |
+| `description`    | **exactly 1**                      | one-sentence project theme (8–10 words, strictly one line)                                                                                                                         |
+| `meta`           | **exactly 2**                      | ① meta_row: Project Type + Audience on one line (no label) · ② right_column claims block:`region="right_column"` + `label="Communication"`, one bullet per claim, ≤ 4 lines |
+| `info-card`      | **1 per `label`**                | 5 cards: Formulation / Fragrance / Packaging / Sustainability / Safety                                                                                                              |
+| `summary-block`  | **exactly 1**                      | right-column summary                                                                                                                                                                |
+| `efficacy-table` | **1 per study/report**             | N studies ⇒ N components; if one study is very long, split it into further`efficacy-table` components (e.g. `Study A (1/2)`, `Study A (2/2)`)                                |
+| `consumer-block` | **1 per consumer-perception test** | N tests ⇒ N components                                                                                                                                                             |
+| `custom`         | escape hatch                             | only when no`type` fits                                                                                                                                                           |
 
 > **Measured efficacy = multiple components, never one giant SVG.** Each CLINS/FE study is a SEPARATE `efficacy-table` component (one `<svg>` each). The engine paginates the middle column automatically. Merging several studies into a single component/svg will clip and lose data.
 
@@ -284,13 +293,12 @@ field_schema:
     - project_name:            # string
     - project_type:            # string — research objective and methodology (e.g. Launch - DEV/DMI/etc.)
     - target_formula:          # string — the formula/reference under evaluation
-    - comparator_formulas:     # string or list — benchmark/competitor formulas
     - target_audience:         # string — skin type, age, gender
 
   PROJECT_DETAIL:              # Feeds: info-card (left_column) · summary-block (right_column) · meta claims block (right_column — communication_claims)
     - packaging_info:          # string — pack type, format, volume
     - communication_claims:    # string or list — marketing/communication claims
-    - formulation_info:        # string — key actives, technology platform, patents
+    - formulation_info:        # string or list — array in JSON; key actives, technology platform, patents; join list items with ` · `
     - fragrance_info:          # string — fragrance note or "No Fragrance"
     - sustainability:          # string or list — sourced JSON key `environmental_sustainability` 
     - safety:                  # string or list — safety claims
@@ -300,7 +308,8 @@ field_schema:
     measured_efficacy:         # For CLINS/FE studies only — display all of the metrics precisely, devided by studies
       structure: "dynamic list of tests — NUMBER OF TESTS AND FINDINGS IS VARIABLE"
       per_test:
-        test_name: "string, as sub-titles. e.g. 'China T12W clinical test'"
+        test_name: "string, as sub-titles. e.g. 'China T12W clinical test'. From JSON: study_name (+ study_context in parentheses when present)"
+        comparator_formulas: "string — from JSON per-study comparator_formulas; render in the table header (e.g. 'vs Comp-A') when non-empty"
         findings:
           - finding_label: "string, e.g. 'Finding 1' or a descriptive name like '9-major wrinkles'"
             metrics:
@@ -313,7 +322,8 @@ field_schema:
   CONSUMER_PERCEPTION:        # Feeds: consumer-block (middle_column)
     structure: "dynamic list of tests — NUMBER OF TESTS AND FINDINGS IS VARIABLE"
     per_test:
-      test_name: "string"
+      test_name: "string — from JSON consumer study_name; include study_context when present"
+      comparator_formulas: "string — from JSON per-study comparator_formulas; render in the block header when non-empty"
       positivity: "string (findings that are positive, display in green) e.g., 'fine lines and wrinkles reduced','good usage experience'"
       cautious: "string (findings that need attention, display in orange, null if not applicable)"
       negativity: "string (findings that are negative, display in red, brutal truth, null if not applicable)"
@@ -342,7 +352,7 @@ The renderer rasterizes SVG via PyMuPDF, so:
 1. **No layout / chrome from you.** Do not emit banners, side-tabs, section titles, or borders — the engine adds them. Do not compute x / y or page numbers.
 2. **Repeat regions must fit page 1.** `top_banner` / `meta_row` / `left_column` / `right_column` are repeated verbatim on every continuation page and are fixed on page 1. Keep the `left_column` info-cards (five cards, each viewBox ≈ 50 px, plus its engine-rendered label line) and the `right_column` blocks (Communication claims ≤ 4 lines + Performance Summary 7–8 lines, each with its label line) compact enough to fit one page. Only `middle_column` (`efficacy-table` / `consumer-block` / `custom`) paginates — emit one component per logical unit and let the engine overflow.
 3. **Right-column block caps.** Both blocks live in the fixed `right_column` (non-paginating): the `Communication` claims block keeps **≤ 4 bullet lines** (viewBox height ≤ ~80), and the `performance_summary` keeps **7–8 lines** (viewBox height ≤ ~280) at the right-column width (the engine adds a label title line on top of each); do not let them grow past one page. The `meta` component in `meta_row` is **one line** — never stack it.
-4. **Full data fidelity (CONVICTION_PERFORMANCE).** Emit one `efficacy-table` per study; include **every** finding and **every** metric with its JSON `status` color. Before finalizing, count studies / findings / metrics in the JSON and verify the rendered `efficacy-table` count and row counts match exactly. Never sample, summarize, or omit CLINS / FE metrics. (CONSUMER_PERCEPTION may be summarized in natural language per the consumer rule below.)
+4. **Full data fidelity (CONVICTION_PERFORMANCE).** Emit one `efficacy-table` per study; include **every** finding and **every** metric with its JSON `status` color. Before finalizing, count studies / findings / metrics in the JSON and verify the rendered `efficacy-table` count and row counts match exactly. Never sample, summarize, or omit CLINS / FE metrics; per-study `study_context` and `comparator_formulas` from the JSON must also be rendered when present — do not drop them. (CONSUMER_PERCEPTION may be summarized in natural language per the consumer rule below.)
 5. **Reference and zero hallucinating.** Every fact, value, or status claim you render must be traceable to the JSON. Render only what the JSON contains; mark missing fields `N/A`; never invent or recompute derived values.
 6. **Consumer color rule.** For `consumer-block` only, assign colors per the consumer code — green = positive (what we want to see), orange = cautious (attention needed), red = negative (action needed), neutral = no expressed positivity/negativity. AI assigns these for CE only.
 7. **Output the XML only.** No markdown fences, no prose, no explanations.
