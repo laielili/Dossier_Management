@@ -208,6 +208,39 @@ def set_pptx_output_dir(path: str) -> str:
     return p
 
 
+# --- Deck output path bookmarks (svg2ppt saved-destination history) ---
+DECK_OUTPUT_PATHS_KEY = "deck_output_paths"
+_DECK_OUTPUT_PATHS_CAP = 20
+
+
+def get_deck_output_paths() -> list[str]:
+    """Saved deck-output folder bookmarks, most-recent first."""
+    return list(get_config_overrides().get(DECK_OUTPUT_PATHS_KEY, []) or [])
+
+
+def add_deck_output_path(path: str) -> list[str]:
+    """Bookmark a deck-output folder (dedup, most-recent first, capped)."""
+    p = str(path).strip()
+    if not p:
+        return get_deck_output_paths()
+    cur = [x for x in get_deck_output_paths() if x != p]
+    cur.insert(0, p)
+    cur = cur[:_DECK_OUTPUT_PATHS_CAP]
+    set_config_overrides({DECK_OUTPUT_PATHS_KEY: cur})
+    return cur
+
+
+def delete_deck_output_path(path: str) -> bool:
+    """Remove a single bookmark. Returns False if it wasn't present."""
+    p = str(path).strip()
+    cur = get_deck_output_paths()
+    nxt = [x for x in cur if x != p]
+    if len(nxt) == len(cur):
+        return False
+    set_config_overrides({DECK_OUTPUT_PATHS_KEY: nxt})
+    return True
+
+
 # Optional MAX ceiling applied AFTER deletion. In delete mode this is OFF by
 # default (top_n=None -> no ceiling) so we never re-introduce rank-based data
 # loss. Pass --top-n N (or API top_n=N) to cap a type at N pages as a safety net.

@@ -81,12 +81,10 @@
   <header class="header">
     <p class="eyebrow">Deck Conversion Utility</p>
     <h1>SVG &rarr; PPTX</h1>
-    <p class="subtitle">Paste AI-generated SVG components, get a 5-region PowerPoint deck</p>
+    <p class="subtitle">From SVG components to PowerPoint deck</p>
     <nav class="page-nav">
       <a class="btn btn-sm btn-outline" href="/"
-        title="Back to the document pipeline">&lsaquo;&nbsp; Back to Pipeline</a>
-      <a class="btn btn-sm btn-outline" href="/html2pptx"
-        title="The legacy browser-based HTML converter">HTML &rarr; PPTX</a>
+        title="Back to the document pipeline">&lsaquo;&nbsp; Back to Home</a>
     </nav>
   </header>
 
@@ -152,6 +150,27 @@
     </div>
   </section>
 
+  <!-- ============ Output folder (saved destination) ============ -->
+  <section class="card" id="output-folder-card">
+    <div class="card-head">
+      <h2>Output Folder</h2>
+    </div>
+    <p class="hint">Where the built <strong>.pptx</strong> is saved. Defaults to your system
+      <strong>Downloads</strong> folder. Pick a folder and click <em>Save Path</em> to persist it.
+      The <strong>Save to folder</strong> button on the result writes the deck there.</p>
+    <div class="form-row">
+      <label for="output-folder">Folder</label>
+      <div class="folder-input-group">
+        <input type="text" id="output-folder" placeholder="e.g. C:\Users\you\Downloads" autocomplete="off">
+        <button class="btn btn-sm btn-outline" id="btn-browse-folder" type="button"
+          title="Open a folder picker">Browse</button>
+        <button class="btn btn-sm btn-outline" id="btn-save-folder" type="button"
+          title="Save this folder as the default output location">Save Path</button>
+      </div>
+    </div>
+    <p class="hint param-hint" id="folder-note"></p>
+  </section>
+
   <!-- ============ Result ============ -->
   <section class="card hidden" id="result-card">
     <div class="card-head">
@@ -159,10 +178,12 @@
     </div>
     <p class="success" id="result-text"></p>
     <div class="prep-actions">
-      <a class="btn btn-primary" id="btn-download" href="#" download>Download PPTX</a>
+      <button class="btn btn-primary" id="btn-download" type="button"
+        title="Save the deck to the configured output folder">Save to folder</button>
       <button class="btn btn-outline" id="btn-preview" type="button">Preview</button>
     </div>
     <p class="muted" id="result-meta"></p>
+    <p class="success hidden" id="save-status"></p>
     <div id="result-warnings" class="warnings hidden"></div>
   </section>
 
@@ -322,7 +343,28 @@
 
 </div>
 
-<script src="/static/svg2ppt-app.js?v=4"></script>
+  <!-- ============ Folder picker modal ============ -->
+  <div id="folder-modal" class="modal hidden">
+    <div class="modal-backdrop" id="folder-modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3>Select an output folder</h3>
+        <button class="modal-close" id="folder-modal-close" type="button" title="Close">&times;</button>
+      </div>
+      <div class="saved-paths-block">
+        <div id="saved-paths-list" class="saved-paths-list"></div>
+      </div>
+      <div id="folder-current" class="folder-current"></div>
+      <div id="folder-list" class="folder-list"></div>
+      <div class="modal-foot">
+        <button class="btn btn-sm btn-outline" id="folder-up" type="button" title="Go up one level">Up</button>
+        <button class="btn btn-sm btn-primary" id="folder-select" type="button"
+          title="Use the current folder for generated PPTX files">Select this folder</button>
+      </div>
+    </div>
+  </div>
+
+<script src="/static/svg2ppt-app.js?v=5"></script>
 
 </body>
 </html>

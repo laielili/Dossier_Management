@@ -69,9 +69,24 @@ const ovRightFontVal = $("ov-right-font-val");
   };
   const PRESET_KEY = "svg2ppt_presets";
 
+  // ---- Output folder config + folder picker (mirrors the HTML->PPTX page) ----
+  const outputFolderInput = $("output-folder");
+  const btnSaveFolder = $("btn-save-folder");
+  const btnBrowseFolder = $("btn-browse-folder");
+  const folderNote = $("folder-note");
+  const folderModal = $("folder-modal");
+  const folderModalClose = $("folder-modal-close");
+  const folderModalBackdrop = $("folder-modal-backdrop");
+  const folderCurrent = $("folder-current");
+  const folderList = $("folder-list");
+  const folderUp = $("folder-up");
+  const folderSelect = $("folder-select");
+
   // Last successful build — re-render reuses its XML + base options.
   let lastBuild = null;
   let rerenderTimer = null;
+  let lastRunId = null;
+  let lastFilename = null;
 
   function log(msg) {
     const area = $("log-area");
@@ -235,11 +250,14 @@ const ovRightFontVal = $("ov-right-font-val");
   // Build-result application (shared by Build and Re-render)
   // ------------------------------------------------------------------
   function applyBuildResult(data) {
+    lastRunId = data.run_id;
+    lastFilename = data.filename;
     resultText.className = "success";
     resultText.textContent = `Built ${data.page_count} page(s).`;
     resultMeta.textContent = `${data.filename} · ${data.size_kb} KB`;
-    btnDownload.href = data.pptx_url;
-    btnDownload.setAttribute("download", data.filename);
+    const st = $("save-status");
+    if (st) st.classList.add("hidden");
+    btnDownload.disabled = false;
     renderPreview(data);
     resultCard.classList.remove("hidden");
 
@@ -425,6 +443,217 @@ const ovRightFontVal = $("ov-right-font-val");
   if (btnPresetDelete) btnPresetDelete.addEventListener("click", deletePreset);
   if (presetSelect) presetSelect.addEventListener("change", () => applyPreset(presetSelect.value));
   loadPresetList();
+
+  // ---- Output folder (saved destination) ----
+  async function loadOutputFolder() {
+    try {
+      const res = await fetch("/config/pptx-output");
+      const data = await res.json();
+      if (data.ok && data.path) {
+        outputFolderInput.value = data.path;
+        folderNote.textContent = data.is_default
+          ? "Using your system Downloads folder. Pick another folder and click Save Path to change it."
+          : "Saved output folder.";
+        if (!data.exists) log("Output folder does not exist yet — it will be created on first save.");
+      }
+    } catch (e) {
+      log("Could not read the output-folder setting: " + e.message);
+    }
+  }
+
+  async function saveOutputFolder(path) {
+    try {
+      const res = await fetch("/config/pptx-output", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        log("Failed to save output folder: " + (data.detail || res.status));
+        return false;
+      }
+      outputFolderInput.value = data.path;
+      folderNote.textContent = "Saved output folder.";
+      return true;
+    } catch (e) {
+      log("Save output folder error: " + e.message);
+      return false;
+    }
+  }
+
+  // ---- Saved deck-output path bookmarks (rendered inside the Browse modal) ----
+  async function addDeckOutputPath(path) {
+    try {
+      const res = await fetch("/config/deck-output-paths", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      return !!res.ok;
+    } catch (e) {
+      log("Save path error: " + e.message);
+      return false;
+    }
+  }
+
+  async function deleteDeckOutputPath(path) {
+    if (!confirm("Delete this saved path?\n" + path)) return;
+    try {
+      const res = await fetch(
+        "/config/deck-output-paths?path=" + encodeURIComponent(path),
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (data.ok) {
+        loadDeckOutputPaths();
+      } else {
+        log("Failed to delete path: " + (data.detail || ""));
+      }
+    } catch (e) {
+      log("Delete path error: " + e.message);
+    }
+  }
+
+  async function loadDeckOutputPaths() {
+    try {
+      const res = await fetch("/config/deck-output-paths");
+      const data = await res.json();
+      renderDeckOutputPaths(data.paths || [], data.active || "");
+    } catch (e) {
+      /* optional */
+    }
+  }
+
+  function renderDeckOutputPaths(paths, active) {
+    const list = $("saved-paths-list");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!paths.length) {
+      list.innerHTML = '<div class="saved-path-empty muted">No saved paths yet.</div>';
+      return;
+    }
+    paths.forEach((p) => {
+      const row = document.createElement("div");
+      row.className = "saved-path-item" + (p === active ? " active" : "");
+      const label = document.createElement("span");
+      label.className = "saved-path-text";
+      label.textContent = p;
+      label.title = "Load this path";
+      label.addEventListener("click", () => {
+        outputFolderInput.value = p;
+        folderModal.classList.add("hidden");
+        log("Loaded saved path: " + p);
+      });
+      const del = document.createElement("button");
+      del.className = "saved-path-del";
+      del.textContent = "🗑️";
+      del.title = "Remove this saved path";
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteDeckOutputPath(p);
+      });
+      row.appendChild(label);
+      row.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+
+  // ---- Folder picker modal (backed by /browse-folders) ----
+  let currentBrowsePath = "";
+  let currentBrowseParent = null;
+
+  async function openFolderBrowser() {
+    currentBrowsePath = (outputFolderInput.value || "").trim();
+    folderModal.classList.remove("hidden");
+    await loadDeckOutputPaths();
+    await folderBrowseNavigate(currentBrowsePath);
+  }
+
+  async function folderBrowseNavigate(path) {
+    currentBrowsePath = path || "";
+    try {
+      const url = "/browse-folders" +
+        (currentBrowsePath ? "?path=" + encodeURIComponent(currentBrowsePath) : "");
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) { log("Folder browse failed."); return; }
+      renderFolderList(data);
+    } catch (e) {
+      log("Folder browse error: " + e.message);
+    }
+  }
+
+  function renderFolderList(data) {
+    currentBrowseParent = data.parent || null;
+    folderCurrent.textContent = data.path
+      ? data.path
+      : (data.drives && data.drives.length ? "Select a drive" : "/");
+    folderList.innerHTML = "";
+    const add = (label, target, extraClass) => {
+      const item = document.createElement("div");
+      item.className = "folder-item" + (extraClass ? " " + extraClass : "");
+      item.textContent = label;
+      item.addEventListener("click", () => folderBrowseNavigate(target));
+      folderList.appendChild(item);
+    };
+    if (data.parent) add("..", data.parent, "folder-up");
+    (data.drives || []).forEach((d) => add(d, d));
+    (data.dirs || []).forEach((d) => add(d, d));
+  }
+
+  // ---- Save deck to the configured output folder ----
+  async function saveDeckToFolder() {
+    if (!lastRunId || !lastFilename) {
+      log("Build the deck first, then Save to folder.");
+      return;
+    }
+    try {
+      const res = await fetch("/svg2ppt/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+        run_id: lastRunId,
+        filename: lastFilename,
+        output_dir: (outputFolderInput.value || "").trim(),
+      }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        log("Save failed: " + (data.detail || res.status));
+        return;
+      }
+      const st = $("save-status");
+      st.classList.remove("hidden");
+      st.textContent = `Saved to ${data.path} (${data.size_kb} KB).`;
+      log("Deck saved to " + data.path);
+    } catch (e) {
+      log("Save error: " + e.message);
+    }
+  }
+
+  if (btnSaveFolder) btnSaveFolder.addEventListener("click", async () => {
+    const p = (outputFolderInput.value || "").trim();
+    if (!p) { log("Enter or choose a folder first."); return; }
+    const a = await saveOutputFolder(p);
+    const b = await addDeckOutputPath(p);
+    if (a || b) log("Output folder saved.");
+  });
+  if (btnBrowseFolder) btnBrowseFolder.addEventListener("click", openFolderBrowser);
+  if (btnDownload) btnDownload.addEventListener("click", saveDeckToFolder);
+  if (folderModalClose) folderModalClose.addEventListener("click", () => folderModal.classList.add("hidden"));
+  if (folderModalBackdrop) folderModalBackdrop.addEventListener("click", () => folderModal.classList.add("hidden"));
+  if (folderUp) folderUp.addEventListener("click", () => { if (currentBrowseParent) folderBrowseNavigate(currentBrowseParent); });
+  if (folderSelect) folderSelect.addEventListener("click", async () => {
+    if (!currentBrowsePath) { log("Navigate into a folder first, then select it."); return; }
+    outputFolderInput.value = currentBrowsePath;
+    if (await saveOutputFolder(currentBrowsePath)) log("Output folder saved.");
+    await addDeckOutputPath(currentBrowsePath);
+    folderModal.classList.add("hidden");
+  });
+
+  btnDownload.disabled = true;
+  loadOutputFolder();
 
   updateStat();
   log("SVG -> PPTX ready. Load a sample or paste a deck XML, then Build.");

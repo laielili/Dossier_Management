@@ -55,6 +55,9 @@ from .config import (
     get_search_paths,
     set_pptx_output_dir,
     set_search_path,
+    add_deck_output_path,
+    delete_deck_output_path,
+    get_deck_output_paths,
     project_data_dir,
     NOISE_CATEGORY_LABELS,
 )
@@ -307,6 +310,36 @@ async def delete_search_path_config(path: str = ""):
         "removed": path.strip(),
         "paths": get_search_paths(),
     }
+
+
+# --- Deck output path bookmarks (svg2ppt saved-destination history) ---
+@app.get("/config/deck-output-paths")
+async def get_deck_output_paths_config():
+    """Saved deck-output folder bookmarks (history, most-recent first).
+
+    ``active`` is the currently effective destination (the shared pptx_output_dir
+    so the SVG->PPTX and HTML->PPTX stages agree). The frontend highlights it.
+    """
+    return {"ok": True, "paths": get_deck_output_paths(), "active": get_pptx_output_dir()}
+
+
+@app.post("/config/deck-output-paths")
+async def set_deck_output_path_config(req: SearchPathRequest):
+    """Persist a deck-output folder bookmark."""
+    if not req.path or not req.path.strip():
+        raise HTTPException(400, "path is required")
+    add_deck_output_path(req.path.strip())
+    return {"ok": True, "path": req.path.strip()}
+
+
+@app.delete("/config/deck-output-paths")
+async def delete_deck_output_path_config(path: str = ""):
+    """Delete a single saved deck-output folder bookmark."""
+    if not path or not path.strip():
+        raise HTTPException(400, "path is required")
+    if not delete_deck_output_path(path.strip()):
+        raise HTTPException(404, "path not found in saved list")
+    return {"ok": True, "removed": path.strip(), "paths": get_deck_output_paths()}
 
 
 @app.get("/browse-folders")

@@ -18,15 +18,15 @@
   <!-- Header -->
   <header class="header">
     <p class="eyebrow">Document Retrieval &amp; Preprocessing</p>
-    <h1>Dossier Management</h1>
-    <p class="subtitle">Find dossiers by keyword, then preprocess</p>
+    <h1>Performance Dossier Management</h1>
+    <p class="subtitle">A route to AI synthesis</p>
     <nav class="page-nav">
       <a class="btn btn-sm btn-outline" href="/FileListener"
         title="Original pipeline UI (Listen Folder + Run Full Pipeline)">File Listener &rsaquo;</a>
       <a class="btn btn-sm btn-outline" href="/html2pptx"
         title="Paste AI-generated HTML slide markup and convert it to a .pptx deck">HTML &rarr; PPTX &rsaquo;</a>
       <a class="btn btn-sm btn-outline" href="/svg2ppt"
-        title="Paste AI-generated SVG components and build a 5-region PPTX deck (server-side)">SVG &rarr; PPTX &rsaquo;</a>
+        title="SVG → PPTX">SVG &rarr; PPTX &rsaquo;</a>
     </nav>
   </header>
 
@@ -39,7 +39,7 @@
       <span class="num">2</span><span class="lbl">Preprocess</span>
     </button>
   </div>
-  <div class="step-indicator">Step <b id="step-num">1</b> of 2 &mdash; <span id="step-desc">Search &amp; select files</span></div>
+ 
 
   <!-- ============ STEP 1: Search & Select ============ -->
   <section class="step-page active" id="step-1">
@@ -181,7 +181,6 @@
       <button class="modal-close" id="folder-modal-close" type="button" title="Close">&times;</button>
     </div>
     <div class="saved-paths-block">
-      <div class="saved-paths-head">Saved Paths</div>
       <div id="saved-paths-list" class="saved-paths-list"></div>
     </div>
     <div id="folder-current" class="folder-current"></div>

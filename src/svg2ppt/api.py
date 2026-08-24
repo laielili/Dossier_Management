@@ -17,7 +17,9 @@ Routes:
 
 from __future__ import annotations
 
+import logging
 import re
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -28,6 +30,8 @@ from pydantic import BaseModel, Field
 
 from . import DeckBuilder, SchemaError
 from .render import RenderError
+
+logger = logging.getLogger(__name__)
 
 # Repo root = src/svg2ppt/api.py -> parent(=svg2ppt) -> parent(=src) -> parent(=repo).
 # Resolved without importing config so the module also loads cleanly when svg2ppt
@@ -164,9 +168,72 @@ async def svg2ppt_build(req: Svg2PptxBuildRequest):
         "page_count": result.page_count,
         "size_kb": size_kb,
         "filename": result.pptx_path.name,
-        "pptx_url": f"/svg2ppt/files/{run_id}/{result.pptx_path.name}",
         "warnings": result.warnings,
     }
+
+
+# ---------------------------------------------------------------------------
+# Save to the configured output folder
+# ---------------------------------------------------------------------------
+
+class Svg2PptxSaveRequest(BaseModel):
+    """Persist a previously-built deck to the user's saved output folder."""
+
+    run_id: str
+    filename: str
+    output_dir: str = ""   # one-off override; omit to use the saved pptx_output_dir
+    overwrite: bool = False
+
+
+def _safe_run_id(raw: str) -> str:
+    """Sanitise a build run_id so it can't escape OUTPUT_ROOT."""
+    rid = (raw or "").strip()
+    rid = _UNSAFE.sub("_", rid).strip().strip(".")
+    rid = rid[:80]
+    if not rid or set(rid) <= {"."}:
+        raise HTTPException(400, "invalid run_id")
+    return rid
+
+
+def _free_dest_path(dest_dir: Path, filename: str) -> Path:
+    """Collision-safe destination: appends ' (2)', ' (3)', … on conflict."""
+    target = dest_dir / filename
+    if not target.exists():
+        return target
+    stem, suffix = target.stem, target.suffix
+    for n in range(2, 1000):
+        candidate = dest_dir / f"{stem} ({n}){suffix}"
+        if not candidate.exists():
+            return candidate
+    raise HTTPException(500, "Could not find a free filename in the output folder")
+
+
+@router.post("/svg2ppt/save")
+async def svg2ppt_save(req: Svg2PptxSaveRequest):
+    """Copy a built deck from its temp run folder into the saved output dir.
+
+    The deck is generated under output/svg2ppt_builds/<run_id>/ and only lives
+    there until the user saves it. We copy it to the configured pptx_output_dir
+    (the same folder HTML -> PPTX uses), collision-safe, and report the path.
+    """
+    from ..config import get_pptx_output_dir
+
+    run_id = _safe_run_id(req.run_id)
+    filename = _safe_filename(req.filename)
+    src = OUTPUT_ROOT / run_id / filename
+    if not src.exists() or not src.is_file():
+        raise HTTPException(404, "Build artifact not found — build the deck again")
+
+    dest_dir = Path((req.output_dir or "").strip() or get_pptx_output_dir()).expanduser()
+    if dest_dir.exists() and not dest_dir.is_dir():
+        raise HTTPException(400, "Output path exists but is not a folder")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    dest = dest_dir / filename if req.overwrite else _free_dest_path(dest_dir, filename)
+    shutil.copy2(src, dest)
+    size_kb = round(dest.stat().st_size / 1024, 1)
+    logger.info("Deck saved to output folder: %s", dest)
+    return {"ok": True, "path": str(dest), "filename": dest.name, "size_kb": size_kb}
 
 
 # ---------------------------------------------------------------------------
