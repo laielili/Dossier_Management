@@ -38,6 +38,7 @@
   const debugCard = $("debug-card");
   const ovAccent = $("ov-accent");
   const ovHeaderBg = $("ov-header-bg");
+  const ovMetaBg = $("ov-meta-bg");
   const ovTabBg = $("ov-tab-bg");
   const ovBorder = $("ov-border");
   const ovTitleFont = $("ov-title-font");
@@ -62,6 +63,7 @@ const ovRightFontVal = $("ov-right-font-val");
   const THEME_DEFAULTS = {
     primary_accent: "#c8860d",
     header_background: "#e8c580",
+    meta_background: "#f5e6c6",
     tab_background: "#b8860b",
     border_color: "#d9a441",
   };
@@ -84,14 +86,7 @@ const ovRightFontVal = $("ov-right-font-val");
     codeStat.textContent = `${n} character${n === 1 ? "" : "s"}`;
   }
 
-  const SAMPLE_XML = `<?xml version="1.0" encoding="UTF-8"?>
-<deck project="P-TIOX" theme="loreal">
-  <component type="title"><svg viewBox="0 0 800 40"><text x="0" y="30" font-size="28" font-weight="bold" fill="#333">P-TIOX</text></svg></component>
-  <component type="meta"><svg viewBox="0 0 900 24"><text x="0" y="18" font-size="13" fill="#c8860d">Anti-aging facial serum · Audience: 35+ · Claim: -45% wrinkles</text></svg></component>
-  <component type="info-card" label="Formulation"><svg viewBox="0 0 200 120"><rect width="200" height="120" fill="#fff" stroke="#d9a441"/><text x="10" y="24" font-size="13" font-weight="bold" fill="#333">Formulation</text><text x="10" y="50" font-size="11" fill="#333">Pure peptide complex</text><text x="10" y="70" font-size="11" fill="#333">Hyaluronic acid</text><text x="10" y="90" font-size="11" fill="#333">Niacinamide 4%</text></svg></component>
-  <component type="efficacy-table"><svg viewBox="0 0 540 200"><rect width="540" height="200" fill="#fff" stroke="#2e7d32"/><text x="10" y="24" font-size="14" font-weight="bold" fill="#333">China T12W Clinical</text><text x="10" y="56" font-size="12" fill="#2e7d32">Wrinkle depth: -45.0%</text><text x="10" y="84" font-size="12" fill="#2e7d32">Firmness: +38.0%</text><text x="10" y="112" font-size="12" fill="#333">Hydration: +52.0%</text><text x="10" y="140" font-size="12" fill="#333">Elasticity: +29.0%</text><text x="10" y="168" font-size="12" fill="#333">Smoothness: +41.0%</text></svg></component>
-  <component type="summary-block"><svg viewBox="0 0 200 120"><rect width="200" height="120" fill="#fff" stroke="#c8860d"/><text x="10" y="24" font-size="13" font-weight="bold" fill="#333">Summary</text><text x="10" y="52" font-size="11" fill="#333">Significant anti-aging</text><text x="10" y="72" font-size="11" fill="#333">benefit at 12 weeks</text><text x="10" y="96" font-size="11" fill="#333">Well tolerated</text></svg></component>
-</deck>`;
+  const SAMPLE_XML_URL = "/static/sample.xml";
 
   function stripFences(text) {
     // Remove a leading ```xml / ``` fenced block if the AI wrapped the XML.
@@ -102,10 +97,16 @@ const ovRightFontVal = $("ov-right-font-val");
   // ---- wire up controls -------------------------------------------------
   xmlInput.addEventListener("input", updateStat);
 
-  $("btn-sample").addEventListener("click", () => {
-    xmlInput.value = SAMPLE_XML;
-    updateStat();
-    log("Loaded sample deck XML.");
+  $("btn-sample").addEventListener("click", async () => {
+    try {
+      const resp = await fetch(SAMPLE_XML_URL);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      xmlInput.value = await resp.text();
+      updateStat();
+      log("Loaded sample deck XML.");
+    } catch (e) {
+      log("Failed to load sample XML: " + e.message);
+    }
   });
 
   $("btn-clear").addEventListener("click", () => {
@@ -261,6 +262,7 @@ const ovRightFontVal = $("ov-right-font-val");
       theme_overrides: {
         primary_accent: ovAccent.value,
         header_background: ovHeaderBg.value,
+        meta_background: ovMetaBg.value,
         tab_background: ovTabBg.value,
         border_color: ovBorder.value,
       },
@@ -386,6 +388,7 @@ const ovRightFontVal = $("ov-right-font-val");
     const tov = p.theme_overrides || {};
     ovAccent.value = tov.primary_accent || THEME_DEFAULTS.primary_accent;
     ovHeaderBg.value = tov.header_background || THEME_DEFAULTS.header_background;
+    ovMetaBg.value = tov.meta_background || THEME_DEFAULTS.meta_background;
     ovTabBg.value = tov.tab_background || THEME_DEFAULTS.tab_background;
     ovBorder.value = tov.border_color || THEME_DEFAULTS.border_color;
     ovTitleFont.value = p.title_font_scale || 1.0;

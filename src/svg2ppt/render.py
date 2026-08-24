@@ -656,29 +656,38 @@ class DeckRenderer:
 
     # Font metric helpers (measurement only; no font files are embedded or
     # named in the deck beyond the plain latin typeface set by python-pptx).
-    _FONT_PATH_CACHE: dict[str, str | None] = {}
+    _FONT_PATH_CACHE: dict[tuple[str, bool], str | None] = {}
     _FONT_FACE_CACHE: dict[tuple[str, int], Any] = {}
 
     @classmethod
     def _font_file_for(cls, family: str, text: str) -> str | None:
-        key = family.lower()
+        has_cjk = any("\u4e00" <= ch <= "\u9fff" for ch in text)
+        key = (family.lower(), has_cjk)
         if key in cls._FONT_PATH_CACHE:
             return cls._FONT_PATH_CACHE[key]
-        has_cjk = any("\u4e00" <= ch <= "\u9fff" for ch in text)
-        lower = key
+        lower = key[0]
         candidates: list[str] = []
         if "yahei" in lower or "hei" in lower or "\u96c5\u9ed1" in lower:
             candidates.append(r"C:\Windows\Fonts\msyh.ttc")
         elif "song" in lower or "\u5b8b" in lower or "simsun" in lower:
             candidates.append(r"C:\Windows\Fonts\simsun.ttc")
-        elif "times" in lower or "serif" in lower:
-            candidates.append(r"C:\Windows\Fonts\times.ttf")
         elif "consol" in lower or "mono" in lower or "courier" in lower:
             candidates.append(r"C:\Windows\Fonts\consola.ttf")
         elif "segoe" in lower:
             candidates.append(r"C:\Windows\Fonts\segoeui.ttf")
         elif "arial" in lower or "helvetica" in lower or "sans" in lower:
             candidates.append(r"C:\Windows\Fonts\arial.ttf")
+        elif "times" in lower or "serif" in lower:
+            candidates.append(r"C:\Windows\Fonts\times.ttf")
+        if has_cjk:
+            # Latin fonts have no CJK glyphs; PowerPoint falls back to a CJK
+            # font (~1em per glyph). Measure with 雅黑 (msyh.ttc) as proxy,
+            # not the latin .notdef box (~0.55em), which under-measures.
+            is_cjk_family = any(
+                t in lower for t in ("yahei", "hei", "\u96c5\u9ed1", "song", "simsun", "\u5b8b")
+            )
+            if not is_cjk_family:
+                candidates.insert(0, r"C:\Windows\Fonts\msyh.ttc")
         while not candidates:
             candidates.append(
                 r"C:\Windows\Fonts\msyh.ttc" if has_cjk else r"C:\Windows\Fonts\arial.ttf"

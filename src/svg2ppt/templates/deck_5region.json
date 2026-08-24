@@ -12,6 +12,7 @@
     "palette": {
       "primary_accent": "#c8860d",
       "header_background": "#e8c580",
+      "meta_background": "#f5e6c6",
       "tab_background": "#b8860b",
       "status_green": "#2e7d32",
       "status_orange": "#e07b00",

@@ -259,8 +259,10 @@ class LayoutEngine:
                 palette["header_background"] = theme_ov["header_background"]
                 if "top_banner" in regions:
                     regions["top_banner"]["background"] = theme_ov["header_background"]
+            if self._is_hex_color(theme_ov.get("meta_background", "")):
+                palette["meta_background"] = theme_ov["meta_background"]
                 if "meta_row" in regions:
-                    regions["meta_row"]["background"] = theme_ov["header_background"]
+                    regions["meta_row"]["background"] = theme_ov["meta_background"]
             if self._is_hex_color(theme_ov.get("tab_background", "")):
                 palette["tab_background"] = theme_ov["tab_background"]
                 chrome.setdefault("side_tab", {})["background"] = theme_ov["tab_background"]
