@@ -59,7 +59,8 @@
       "title": "Project Details",
       "background": "#ffffff",
       "show_border": true,
-      "padding": [8, 10, 8, 10]
+      "padding": [8, 10, 8, 10],
+      "distribute": true
     },
     "middle_column": {
       "x": 220,
@@ -79,7 +80,8 @@
       "title": "Other Info",
       "background": "#ffffff",
       "show_border": true,
-      "padding": [8, 10, 8, 10]
+      "padding": [8, 10, 8, 10],
+      "anchor": 0.5
     }
   },
   "chrome": {

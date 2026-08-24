@@ -65,6 +65,10 @@ class Region:
     background: str
     show_border: bool
     padding: list[float]  # [top, right, bottom, left]
+    distribute: bool = False  # spread items evenly across the full column height
+    anchor: float = 0.0  # if > 0, the first item is flush at top and the rest
+    # start at this fraction of the *full deck page* height (pushed down if
+    # the top item is tall enough to overlap). Used by the right column.
 
     @property
     def inner_x(self) -> float:
@@ -130,6 +134,7 @@ class LayoutEngine:
             template_path = here / "templates" / "deck_5region.json"
         self.template_path = Path(template_path)
         self.template = self._load_template()
+        self.canvas_height = float(self.template["canvas"]["height"])
         # Apply debug/theme overrides to the in-memory template copy BEFORE
         # building regions, so region geometry, padding, gap and chrome all
         # reflect the requested look. This never touches the template file.
@@ -349,6 +354,8 @@ class LayoutEngine:
                 background=data.get("background", "#ffffff"),
                 show_border=bool(data.get("show_border", True)),
                 padding=padding,
+                distribute=bool(data.get("distribute", False)),
+                anchor=float(data.get("anchor", 0.0)),
             )
         return regions
 
@@ -474,6 +481,64 @@ class LayoutEngine:
         if gap is None:
             gap = self.gap
         placed: list[PlacedComponent] = []
+
+        if not items:
+            return placed, items
+
+        # When a region opts into distribution and all items fit with room to
+        # spare, spread them across the full column height (space-between: the
+        # first card sits flush under the section title and the leftover space
+        # is distributed among the gaps between cards) instead of packing them
+        # at the top with a leading margin.
+        total_h = sum(h for _, _, h in items) + (len(items) - 1) * gap
+        if region.distribute and total_h < region.content_h and len(items) > 1:
+            per = (region.content_h - total_h) / (len(items) - 1)
+            y = region.content_y
+            last = len(items) - 1
+            for idx, (comp, width, height) in enumerate(items):
+                placed.append(
+                    PlacedComponent(
+                        component=comp,
+                        region=region.name,
+                        x=region.inner_x,
+                        y=y,
+                        w=width,
+                        h=height,
+                    )
+                )
+                y += height + (gap + per if idx < last else 0)
+            return placed, []
+
+        # Anchor mode (right column): the first item is flush at the top, and
+        # every subsequent item starts at ``anchor`` fraction of the *full page*
+        # height — unless the top item is tall enough to overlap, in which case
+        # it is pushed down just below the top item (adaptive). If the anchored
+        # layout would overflow the column, fall back to the default tight
+        # stacking below so the repeat-region overflow check can fire.
+        if region.anchor > 0.0 and items:
+            anchor_y = max(region.content_y, region.anchor * self.canvas_height)
+            y = region.content_y
+            fit = True
+            for idx, (comp, width, height) in enumerate(items):
+                cy = y if idx == 0 else max(anchor_y, y + gap)
+                placed.append(
+                    PlacedComponent(
+                        component=comp,
+                        region=region.name,
+                        x=region.inner_x,
+                        y=cy,
+                        w=width,
+                        h=height,
+                    )
+                )
+                y = cy + height
+                if y > region.content_y + region.content_h:
+                    fit = False
+                    break
+            if fit:
+                return placed, []
+
+        placed = []
         remaining_height = region.content_h
         y = region.content_y
 
