@@ -542,16 +542,26 @@ class DeckRenderer:
                 font_family=self.theme["typography"]["font_family"],
             )
 
-        for span in self._extract_text_spans(placed.component.svg):
-            # The label box already carries the title; skip a span that is the
-            # very same string, otherwise it would render a duplicate.
-            if (
-                placed.component.label
-                and self.layout.labels_enabled
-                and span.text.strip().lower() == placed.component.label.strip().lower()
-            ):
-                continue
-            self._add_span_textbox(group, placed, span)
+        spans = self._extract_text_spans(placed.component.svg)
+        # The label box already carries the title; drop a span that is the
+        # very same string, otherwise it would render a duplicate.
+        if placed.component.label and self.layout.labels_enabled:
+            spans = [
+                s for s in spans
+                if s.text.strip().lower() != placed.component.label.strip().lower()
+            ]
+        # Per-span vertical line height = gap to the next baseline, so tightly
+        # packed bullets never overlap. Sorting by y makes "next baseline"
+        # well-defined even for the multi-column rows that share one y.
+        ordered = sorted(spans, key=lambda s: s.y)
+        for span in spans:
+            nxt = None
+            for s2 in ordered:
+                if s2.y > span.y + 0.01:
+                    nxt = s2.y
+                    break
+            gap_vb = (nxt - span.y) if nxt is not None else None
+            self._add_span_textbox(group, placed, span, line_gap_vb=gap_vb)
 
         # Each shape added above recalculates the group extents to the child
         # bounding box and resets a:off to (0, 0), so the group's slide-space
@@ -571,7 +581,13 @@ class DeckRenderer:
         ch_ext.cx = w_emu
         ch_ext.cy = h_emu
 
-    def _add_span_textbox(self, group: Any, placed: Any, span: TextSpan) -> None:
+    def _add_span_textbox(
+        self,
+        group: Any,
+        placed: Any,
+        span: TextSpan,
+        line_gap_vb: float | None = None,
+    ) -> None:
         """Map a viewBox-space TextSpan onto the placed component rect and add
         a fixed-size, non-wrapping text box inside the group.
 
@@ -584,7 +600,19 @@ class DeckRenderer:
         if vw <= 0 or vh <= 0:
             return
         sx = placed.w / vw
-        sy = placed.h / vh
+        # The page preview and the component PNG both compress the SVG into the
+        # area BELOW the engine-rendered label title: the label slot is reserved
+        # at the top and the SVG is scaled to (component height - label slot).
+        # The editable text overlay must use that same vertical scale, else its
+        # text boxes are mapped taller than the raster and the bottom lines
+        # overflow and get clamped on top of the previous line.
+        label_slot = 0.0
+        if placed.component.label and self.layout.labels_enabled:
+            w_px = int(round(placed.w * self.px_per_unit))
+            lh_px = self._label_to_image(placed.component.label, w_px).height
+            label_slot = lh_px / self.px_per_unit
+        avail_h = placed.h - label_slot
+        sy = (avail_h / vh) if avail_h > 0 else (placed.h / vh)
 
         w_total = int(placed.w * EMU_PER_UNIT)
         h_total = int(placed.h * EMU_PER_UNIT)
@@ -606,19 +634,26 @@ class DeckRenderer:
             )
 
         font_pt = self._fit_font_pt(span.text, font_pt, width, bold, family)
-        line_h_emu = int(font_pt * 1.3 * 12700)
+        # Line height: prefer the SVG's actual gap to the next baseline so
+        # tightly-packed bullets never overlap; cap at 1.3x font and keep at
+        # least 1.0x so the glyph is not clipped.
+        base_h = int(font_pt * 1.3 * 12700)
+        if line_gap_vb is not None and line_gap_vb > 0:
+            gap_h = int(line_gap_vb * sy * EMU_PER_UNIT)
+            line_h_emu = max(min(base_h, gap_h), int(font_pt * 12700))
+        else:
+            line_h_emu = base_h
 
         # SVG text y is the baseline; approximate the box top at ~0.8em above.
         top_emu = (
             (span.y - vby) * sy - span.font_size * sy * 0.8
         ) * EMU_PER_UNIT
         # The component PNG reserves the label slot at its top, so the text
-        # overlay must shift down by the same amount (px -> EMU) to stay glued
-        # to the graphic. The top is then pinned inside the component rect.
-        if placed.component.label and self.layout.labels_enabled:
-            w_px = int(round(placed.w * self.px_per_unit))
-            lh_px = self._label_to_image(placed.component.label, w_px).height
-            top_emu += lh_px * (EMU_PER_UNIT * 100.0 / self.dpi)
+        # overlay shifts down by the same amount (canvas units -> EMU) to stay
+        # glued to the graphic. With the corrected vertical scale above, the
+        # boxes now fit inside the component and no longer collide.
+        if label_slot:
+            top_emu += label_slot * EMU_PER_UNIT
         top_emu = min(max(int(top_emu), 0), max(h_total - line_h_emu, 0))
 
         self._add_textbox(
