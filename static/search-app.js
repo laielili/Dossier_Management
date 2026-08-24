@@ -38,8 +38,6 @@ function goStep(n) {
   $("#step-" + n).classList.add("active");
   $("#pill-1").classList.toggle("active", n === 1);
   $("#pill-2").classList.toggle("active", n === 2);
-  $("#step-num").textContent = n;
-  $("#step-desc").textContent = n === 1 ? "Search & select files" : "Preprocessing";
 }
 $("#pill-1").addEventListener("click", () => goStep(1));
 $("#btn-back").addEventListener("click", () => goStep(1));

@@ -452,7 +452,7 @@ const ovRightFontVal = $("ov-right-font-val");
       if (data.ok && data.path) {
         outputFolderInput.value = data.path;
         folderNote.textContent = data.is_default
-          ? "Using your system Downloads folder. Pick another folder and click Save Path to change it."
+          ? "Default: system Downloads folder."
           : "Saved output folder.";
         if (!data.exists) log("Output folder does not exist yet — it will be created on first save.");
       }
