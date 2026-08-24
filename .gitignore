@@ -75,5 +75,5 @@ _exp_*
 #Demo
 demo/
 
-#Local save search_paths
+#Local saved search_paths
 config_overrides.json
