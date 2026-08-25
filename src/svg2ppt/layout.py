@@ -47,6 +47,87 @@ FONT_FLOOR = 0.15
 DESCRIPTION_REGION_RATIO = 0.44
 
 
+# ---- Balanced-flex helpers (left_column "constant internal blank" mode) ----
+# Every info-card gets a fixed internal bottom blank (in text lines) so fields
+# feel equally airy regardless of content. The raster layer and the editable
+# text overlay both consume the rewritten SVG, so the blank is consistent by
+# construction and stays glued to the graphic.
+_FLEX_TEXT_RE = re.compile(r"<(?:text|tspan)\b([^>]*)>", re.IGNORECASE)
+_FLEX_ATTR_RE = re.compile(r'\b([\w:-]+)\s*=\s*"([^"]*)"')
+
+
+def _flex_attrs(tag: str) -> dict[str, str]:
+    return {k.lower(): v for k, v in _FLEX_ATTR_RE.findall(tag)}
+
+
+def measure_content_extent(svg_text: str):
+    """Return (min_y, max_y, max_font) of the SVG's text in user units, or None."""
+    min_y = max_y = None
+    max_font = 0.0
+    for m in _FLEX_TEXT_RE.finditer(svg_text):
+        a = _flex_attrs(m.group(1))
+        y = a.get("y")
+        fs = a.get("font-size")
+        if y is not None:
+            try:
+                yv = float(y)
+            except ValueError:
+                continue
+            min_y = yv if min_y is None else min(min_y, yv)
+            max_y = yv if max_y is None else max(max_y, yv)
+        if fs is not None:
+            try:
+                max_font = max(max_font, float(fs))
+            except ValueError:
+                pass
+    if min_y is None:
+        return None
+    return min_y, max_y, (max_font if max_font > 0 else 11.0)
+
+
+def count_text_lines(svg_text: str) -> int:
+    """Number of visual text lines = count of distinct baseline `y` values."""
+    ys = set()
+    for m in _FLEX_TEXT_RE.finditer(svg_text):
+        y = _flex_attrs(m.group(1)).get("y")
+        if y is not None:
+            try:
+                ys.add(round(float(y), 3))
+            except ValueError:
+                pass
+    return max(1, len(ys))
+
+
+def normalize_info_card(svg_text: str, blank_lines: float, top_pad_lines: float) -> str:
+    """Rewrite the SVG viewBox so its text block keeps ``top_pad_lines`` of top
+    padding and a constant ``blank_lines``-line bottom blank, independent of how
+    much content it has.
+    """
+    ext = measure_content_extent(svg_text)
+    w, h = svg_natural_size(svg_text)
+    if ext is None or w <= 0:
+        return svg_text
+    min_y, max_y, max_font = ext
+    line_h = max_font * 1.3
+    content_top = min_y - 0.8 * line_h
+    content_bottom = max_y + 0.2 * line_h
+    content_block = max(content_bottom - content_top, line_h)
+    top_pad = top_pad_lines * line_h
+    bottom_blank = blank_lines * line_h
+    new_h = top_pad + content_block + bottom_blank
+    shift = top_pad - content_top  # viewport offset that pushes content down
+    out = re.sub(
+        r'viewBox\s*=\s*"[^"]+"',
+        f'viewBox="0 {-shift:.4f} {w:.4f} {new_h:.4f}"',
+        svg_text, count=1, flags=re.IGNORECASE,
+    )
+    out = re.sub(
+        r'height\s*=\s*"[^"]+"',
+        f'height="{new_h:.4f}"', out, count=1, flags=re.IGNORECASE,
+    )
+    return out
+
+
 class LayoutError(ValueError):
     """Raised when components cannot be laid out under the template rules."""
 
@@ -66,6 +147,10 @@ class Region:
     show_border: bool
     padding: list[float]  # [top, right, bottom, left]
     distribute: bool = False  # spread items evenly across the full column height
+    flex: bool = False  # balanced-flex: constant internal card blank + adaptive compression
+    card_blank_lines: float = 4.0  # internal bottom blank reserved per card, in lines
+    line_budget: float = 4.0  # content lines above this => "tall" field (protected)
+    top_pad_lines: float = 1.0  # internal top padding per card, in lines
     anchor: float = 0.0  # if > 0, the first item is flush at top and the rest
     # start at this fraction of the *full deck page* height (pushed down if
     # the top item is tall enough to overlap). Used by the right column.
@@ -355,6 +440,10 @@ class LayoutEngine:
                 show_border=bool(data.get("show_border", True)),
                 padding=padding,
                 distribute=bool(data.get("distribute", False)),
+                flex=bool(data.get("flex", False)),
+                card_blank_lines=float(data.get("card_blank_lines", 4)),
+                line_budget=float(data.get("line_budget", 4)),
+                top_pad_lines=float(data.get("top_pad_lines", 1)),
                 anchor=float(data.get("anchor", 0.0)),
             )
         return regions
@@ -480,6 +569,8 @@ class LayoutEngine:
         """
         if gap is None:
             gap = self.gap
+        if region.flex:
+            return self._fit_flex(region, items, gap)
         placed: list[PlacedComponent] = []
 
         if not items:
@@ -564,6 +655,159 @@ class LayoutEngine:
             )
             y += height
             remaining_height -= consumed
+
+        return placed, []
+
+    def _fit_flex(
+        self,
+        region: Region,
+        items: list[tuple[Component, float, float]],
+        gap: float | None = None,
+    ) -> tuple[list[PlacedComponent], list[tuple[Component, float, float]]]:
+        """Balanced-flex layout for one column (e.g. ``left_column``).
+
+        Default: every info-card reserves a constant internal bottom blank
+        (``region.card_blank_lines`` lines) so fields look equally airy. When the
+        column overflows, compress in priority order: (1) shrink the bottom
+        blank of non-tall fields, (2) shrink non-tall fields' content, (3) apply
+        a global mild compression across all fields. Whatever still overflows
+        spills to the next page (the caller paginates); a warning is surfaced
+        elsewhere if even the floor cannot fit.
+        """
+        if gap is None:
+            gap = self.gap
+        if not items:
+            return [], items
+        n = len(items)
+        blank_default = region.card_blank_lines
+        top_pad = region.top_pad_lines
+        line_budget = region.line_budget
+        blank_floor = max(1.0, blank_default - 3.0)
+        scale_floor = 0.6
+
+        data = []
+        for comp, width, _h in items:
+            orig = comp.attrs.get("_orig_svg") or comp.svg
+            comp.attrs["_orig_svg"] = orig
+            ext = measure_content_extent(orig)
+            lines = count_text_lines(orig) if ext else 1
+            data.append(
+                {
+                    "comp": comp,
+                    "width": width,
+                    "orig": orig,
+                    "lines": lines,
+                    "tall": lines > line_budget,
+                }
+            )
+
+        def build(d, blank, scale):
+            s = scale_svg_fonts(d["orig"], scale) if scale != 1.0 else d["orig"]
+            s2 = normalize_info_card(s, blank, top_pad)
+            w0, h0 = svg_natural_size(s2)
+            height = d["width"] * (h0 / w0) if w0 > 0 else 10.0
+            # info-card carries a label the renderer reserves a slot for on top
+            # of the SVG body; mirror _component_size so placed.h matches.
+            if d["comp"].label and self.labels_enabled:
+                height += self._label_height(1.0)
+            return height, s2
+
+        def total(blanks, scales):
+            t = 0.0
+            for i, d in enumerate(data):
+                h, _ = build(d, blanks[i], scales[i])
+                t += h
+                if i < n - 1:
+                    t += gap
+            return t
+
+        blanks = [blank_default] * n
+        scales = [1.0] * n
+
+        if total(blanks, scales) > region.content_h:
+            # Step 1: shrink the bottom blank of non-tall fields first.
+            blanks = [blank_floor if not d["tall"] else blank_default for d in data]
+            if total(blanks, scales) > region.content_h:
+                # Step 2: shrink content of non-tall fields (binary search).
+                lo, hi = scale_floor, 1.0
+                for _ in range(20):
+                    mid = (lo + hi) / 2.0
+                    sc = [mid if not d["tall"] else 1.0 for d in data]
+                    if total(blanks, sc) <= region.content_h:
+                        lo = mid
+                    else:
+                        hi = mid
+                scales = [lo if not d["tall"] else 1.0 for d in data]
+                if total(blanks, scales) > region.content_h:
+                    # Step 3: global mild compression across all fields
+                    # (the "squeeze other directions" case, e.g. two adjacent
+                    # tall fields). Blank already at floor for non-tall.
+                    blanks = [blank_floor] * n
+                    lo, hi = scale_floor, 1.0
+                    for _ in range(20):
+                        mid = (lo + hi) / 2.0
+                        sc = [mid] * n
+                        if total(blanks, sc) <= region.content_h:
+                            lo = mid
+                        else:
+                            hi = mid
+                    scales = [lo] * n
+
+        heights = []
+        svgs = []
+        for i, d in enumerate(data):
+            h, s2 = build(d, blanks[i], scales[i])
+            heights.append(h)
+            svgs.append(s2)
+
+        total_h = sum(heights) + (n - 1) * gap
+        extra = 0.0
+        if total_h <= region.content_h and n > 1:
+            # space-between: distribute leftover as equal extra gap
+            extra = (region.content_h - total_h) / (n - 1)
+
+        placed: list[PlacedComponent] = []
+        y = region.content_y
+        is_repeat = region.name in self.repeat_regions
+        overrun = False
+        for i, d in enumerate(data):
+            h = heights[i]
+            gap_before = (gap + extra) if placed else 0.0
+            if placed and y + gap_before + h > region.content_y + region.content_h:
+                if is_repeat:
+                    # Repeat regions must live entirely on page 1 (they are
+                    # cloned onto every continuation page), so they cannot spill.
+                    # Instead of a fatal error, place best-effort and let the
+                    # cards extend past the column edge so the user sees the
+                    # overflow in the preview and dials the content back.
+                    overrun = True
+                else:
+                    # Overflow -> spill the remainder to the next page.
+                    leftover = [
+                        (data[j]["comp"], data[j]["width"], heights[j])
+                        for j in range(i, n)
+                    ]
+                    return placed, leftover
+            y += gap_before
+            d["comp"].svg = svgs[i]
+            placed.append(
+                PlacedComponent(
+                    component=d["comp"],
+                    region=region.name,
+                    x=region.inner_x,
+                    y=y,
+                    w=d["width"],
+                    h=h,
+                )
+            )
+            y += h
+
+        if overrun:
+            self.warnings.append(
+                f"Region '{region.name}' overflows the column even at the "
+                f"compression floor; cards extend beyond the column edge. "
+                f"Reduce content or raise the column height."
+            )
 
         return placed, []
 

@@ -389,7 +389,12 @@ class DeckRenderer:
             inner = match.group(2)
             attrs = dict(self._ATTR_RE.findall(raw_attrs))
             style = attrs.get("style", "")
-            text = html.unescape(re.sub(r"<[^>]+>", "", inner)).strip()
+            text = html.unescape(re.sub(r"<[^>]+>", "", inner))
+            # Collapse internal whitespace (including the newlines that pretty-
+            # printed inline <tspan>s leave between them) to single spaces.
+            # Left intact, an embedded "\n" becomes a hard line break in
+            # PowerPoint and a one-line SVG text turns into two stacked lines.
+            text = re.sub(r"\s+", " ", text).strip()
             if not text:
                 continue
 

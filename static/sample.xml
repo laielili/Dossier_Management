@@ -21,7 +21,7 @@
     <svg viewBox="0 0 1000 16" width="1000" height="16">
       <text x="0" y="12" font-size="8" fill="#333">
         <tspan font-weight="bold">Project Type: </tspan>[PROJECT_TYPE]
-        <tspan font-weight="bold"> · Audience: </tspan>[TARGET_AUDIENCE]
+        <tspan font-weight="bold"> | Audience: </tspan>[TARGET_AUDIENCE]
       </text>
     </svg>
   </component>

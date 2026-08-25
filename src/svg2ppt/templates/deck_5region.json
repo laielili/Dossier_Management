@@ -60,7 +60,11 @@
       "background": "#ffffff",
       "show_border": true,
       "padding": [8, 10, 8, 10],
-      "distribute": true
+      "distribute": true,
+      "flex": true,
+      "card_blank_lines": 4,
+      "line_budget": 4,
+      "top_pad_lines": 1
     },
     "middle_column": {
       "x": 220,
