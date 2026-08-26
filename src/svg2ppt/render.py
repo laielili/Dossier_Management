@@ -559,14 +559,23 @@ class DeckRenderer:
         # packed bullets never overlap. Sorting by y makes "next baseline"
         # well-defined even for the multi-column rows that share one y.
         ordered = sorted(spans, key=lambda s: s.y)
-        for span in spans:
+        # Summary cards get uniform-width text boxes: every left-aligned body
+        # line shares the measured width of the card's longest line, so the
+        # editable boxes in PowerPoint look like one aligned block instead of
+        # ragged, content-sized strips.
+        uniform_w = None
+        if placed.component.type == "summary-block":
+            uniform_w = self._summary_uniform_width_emu(placed, ordered)
+        for span in ordered:
             nxt = None
             for s2 in ordered:
                 if s2.y > span.y + 0.01:
                     nxt = s2.y
                     break
             gap_vb = (nxt - span.y) if nxt is not None else None
-            self._add_span_textbox(group, placed, span, line_gap_vb=gap_vb)
+            self._add_span_textbox(
+                group, placed, span, line_gap_vb=gap_vb, force_width=uniform_w
+            )
 
         # Each shape added above recalculates the group extents to the child
         # bounding box and resets a:off to (0, 0), so the group's slide-space
@@ -586,12 +595,42 @@ class DeckRenderer:
         ch_ext.cx = w_emu
         ch_ext.cy = h_emu
 
+    def _summary_uniform_width_emu(
+        self, placed: Any, spans: list[TextSpan]
+    ) -> int | None:
+        """Uniform text-box width (EMU) for a summary card's left-aligned lines.
+
+        The width is the measured width of the longest line in the card,
+        clamped so no box spills past the component's right edge. Returns
+        None when the card has no measurable body lines.
+        """
+        vbx, _, vw, _ = self._view_box_parts(placed.component.svg)
+        if vw <= 0:
+            return None
+        sx = placed.w / vw
+
+        # Measure each line at its own font size (viewBox units -> EMU via sx).
+        best_px = 0.0
+        for span in spans:
+            if span.anchor != "start":
+                return None  # mixed anchors: leave layout untouched
+            w_pt = self._estimate_text_width_pt(
+                span.text, span.font_size, span.weight == "bold", span.font_family
+            )
+            best_px = max(best_px, (w_pt / PT_PER_UNIT) * sx)
+        if best_px <= 0:
+            return None
+        right_edge = placed.w - min(max((spans[0].x - vbx) * sx, 0), placed.w)
+        width_units = min(best_px, max(right_edge, placed.w / 10))
+        return int(width_units * EMU_PER_UNIT)
+
     def _add_span_textbox(
         self,
         group: Any,
         placed: Any,
         span: TextSpan,
         line_gap_vb: float | None = None,
+        force_width: int | None = None,
     ) -> None:
         """Map a viewBox-space TextSpan onto the placed component rect and add
         a fixed-size, non-wrapping text box inside the group.
@@ -637,6 +676,10 @@ class DeckRenderer:
                 max(w_total - min(max(int(x_emu), 0), w_total - 1), 1),
                 PP_ALIGN.LEFT,
             )
+        if force_width is not None and align == PP_ALIGN.LEFT:
+            # Uniform-width override: keep the line's left edge, replace the
+            # ragged content width with the card's shared block width.
+            width = min(max(force_width, 1), w_total - left)
 
         font_pt = self._fit_font_pt(span.text, font_pt, width, bold, family)
         # Line height: prefer the SVG's actual gap to the next baseline so

@@ -379,6 +379,7 @@ The sole `summary-block` must be a compact synthesis inside ONE SVG: `OVERALL` a
 4. **Compact SVG pattern**
    - Use uppercase bold neutral field-label tspans followed by neutral body text, for example `<tspan font-weight="bold">CLINICAL:</tspan>` — every by-type line MUST open with its subtitle tspan (see the By-Type Contract above).
    - Wrap selected values in nested or adjacent bold, colored `<tspan>` elements. Keep every visible text element compliant with the SVG font rule.
+   - **Uniform block layout**: all body lines inside the summary card MUST share the SAME left `x` (e.g. `x="12"`), the SAME `font-size`, and be wrapped so each visual line ends near a common right boundary (wrap long sentences into multiple `<text>` lines of comparable length instead of one very long line). This keeps the rendered text block visually rectangular.
    - Keep the whole summary within the right-column height cap below. If needed, shorten wording first, then reduce to the two or three most decision-relevant values per type—never drop an entire present report type.
 
 
