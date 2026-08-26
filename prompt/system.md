@@ -239,8 +239,18 @@ Output the entire `<deck>` XML wrapped in **exactly ONE** markdown code block (`
   <component type="meta"><svg viewBox="0 0 1000 16" width="1000" height="16"><text x="0" y="12" font-size="8" fill="#333"><tspan font-weight="bold">Project Type: </tspan>DEV<tspan font-weight="bold"> | Audience: </tspan>Female, 25-55 y.o., all skin types including sensitive</text></svg></component>
   <component type="meta" region="right_column" label="Communication"><svg viewBox="0 0 380 68" width="380" height="68"><text x="12" y="16" font-size="12" fill="#333">• Inspired by BOTOX</text><text x="12" y="36" font-size="12" fill="#333">• Treats areas Botox cannot reach</text><text x="12" y="56" font-size="12" fill="#333">• Visible results in 4 weeks</text></svg></component>
   <component type="info-card" label="Formulation"><svg viewBox="0 0 380 50" width="380" height="50">...</svg></component>
-  <component type="efficacy-table"><svg viewBox="0 0 900 240" width="900" height="240">...</svg></component>
-  <component type="consumer-block"><svg viewBox="0 0 900 160" width="900" height="160">...</svg></component>
+  <component type="efficacy-table"><svg viewBox="0 0 900 240" width="900" height="240">
+      <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
+      <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">China T12W clinical test</text>
+      <text x="15" y="45" font-size="10" fill="#666">N=42, female 25-55 · vs Comp-A</text>
+      <!-- ... metric rows ... -->
+    </svg></component>
+  <component type="consumer-block"><svg viewBox="0 0 900 160" width="900" height="160">
+      <rect x="0" y="0" width="900" height="30" fill="#e3f2fd" />
+      <text x="15" y="20" font-size="14" font-weight="bold" fill="#1565c0">US consumer perception test</text>
+      <text x="15" y="45" font-size="10" fill="#666">N=104, weekly diary · vs Comp-A</text>
+      <!-- ... perception bullets ... -->
+    </svg></component>
   <component type="summary-block" label="Performance Summary"><svg viewBox="0 0 380 200" width="380" height="200">...</svg></component>
   <component type="custom" region="middle_column"><svg viewBox="0 0 900 120" width="900" height="120">...</svg></component>
 </deck>
@@ -280,12 +290,13 @@ Each `<component>` carries exactly ONE `<svg>` (see SVG authoring rules). Beyond
 
 > **Measured efficacy = multiple components, never one giant SVG.** Each CLINS/FE study is a SEPARATE `efficacy-table` component (one `<svg>` each). The engine paginates the middle column automatically. Merging several studies into a single component/svg will clip and lose data.
 >
-> **Header pattern (mandatory, both `efficacy-table` and `consumer-block`) — title line + context line:**
+> **Header pattern (mandatory, both `efficacy-table` and `consumer-block`) — title line + context line.** A study header is ALWAYS built from TWO SEPARATE `<text>` elements — never one merged `<text>`, never a `<tspan>` inside the title:
 > ```xml
-> <text x="15" y="20" font-size="14" font-weight="bold" font-family="Arial, sans-serif" fill="#333">China T12W clinical test</text>
-> <text x="15" y="45" font-size="10" fill="#666" font-family="Arial, sans-serif">N=42, female 25-55 · vs Comp-A</text>
+> <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
+> <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">China T12W clinical test</text>
+> <text x="15" y="45" font-size="10" fill="#666">N=42, female 25-55 · vs Comp-A</text>
 > ```
-> `study_context` lives ONLY on that second grey line — never appended to the bold title.
+> Structural facts baked into this pattern: the bold title (`y=20`, inside the 30px header strip) carries `study_name` ONLY; the grey context line (`y=45`, BELOW the strip) carries `study_context` ONLY (plus `vs <comparator>` when present). If you find yourself writing `study_context` text inside the same `<text>` as the title, STOP — split it into the second `<text>` element. A consumer-block header is identical except the strip/title use `fill="#e3f2fd"` / `#1565c0`.
 
 ### Field Output Map (field_schema)
 
@@ -382,7 +393,7 @@ The renderer rasterizes SVG via PyMuPDF, so:
 3. **Standard shapes only:** `rect`, `line`, `circle`, `ellipse`, `polygon`, `path`, `text` (+ `tspan`).
 4. **Font (MANDATORY):** every visible `<text>` / `<tspan>` MUST carry `font-family="Arial, sans-serif"`. Never emit other families (Georgia, Calibri, Times, mono, etc.): the editable-PPT pipeline measures text width with Arial metrics and PowerPoint renders Arial — any other family desyncs preview↔PPT width and can overflow the text box. Omitting the attribute is also forbidden (the preview falls back to a default that may differ from the measured font).
 5. **Colors:** hex only. Status palette: green `#2e7d32`, orange `#e07b00`, red `#c62828`, neutral `#333333`. 
-6. **Multi-line text:** stack multiple `<text>` elements (one line each) or use `<tspan>`.
+6. **Multi-line text:** stack multiple `<text>` elements (one line each) or use `<tspan>`. **Exception — study headers:** the title/context pair in every `efficacy-table` / `consumer-block` MUST be two separate `<text>` elements per the Header pattern above; a `<tspan>` inside one merged `<text>` is forbidden there.
 7. **Height budget** (at the component's column width): middle / left / right ≈ 405 px, top_banner ≈ 54 px, meta_row ≈ 16 px (one line). A single component taller than its budget is **not** auto-split by the engine — it overflows and is clipped. If a study's table exceeds the middle budget, **split it into multiple `efficacy-table` components** (e.g. `Study A (1/2)`, `Study A (2/2)`); the engine then paginates them across continuation pages (repeating banner / meta / left / right). **top_banner (≈54 px) must hold BOTH `title` and `formula-ref`** — keep both svgs very flat: their viewBox height/width ratios must sum to ≤ ~0.047 (e.g. title `1000×22` + formula-ref `1000×14`). Otherwise the deck hard-fails with a `Repeat region 'top_banner' overflows page 1` LayoutError. **The `description` line is laid out horizontally** in the banner's right share (≈44% width, viewBox `440×20`, strictly one line), vertically centered beside the stacked title/formula-ref — it consumes no extra vertical budget. **The five left-column info-cards must fit the ≈405 px column WITH the engine-rendered label title lines** (~14 px per card) — keep each card's viewBox ≈ 50 px tall (e.g. `380×50`). **The right column holds TWO blocks on top of each other**: the `Communication` claims block (≤ 4 bullet lines, viewBox height ≤ ~80, plus its label line) and the four-field `Performance Summary` (≤ 16 text lines, viewBox height ≤ ~280, plus its label line) — together with the label lines they must fit the ≈405 px column.
 8. **All visible text in English** (numbers / symbols as-is). Render `N/A` when a field is absent in the JSON; never fabricate.
 9. **Exactly one markdown code block.** Wrap the **entire** `<deck>` XML in a single `` ```xml `` … `` ``` `` block. Do **not** put separate fences around individual `<component>` elements (a fence per component fragments the deck and breaks the one-`<svg>`-per-component rule), and do not emit any prose or extra blocks before or after the single block. The whole deck must be copy-pasteable as one block.
@@ -393,7 +404,7 @@ The renderer rasterizes SVG via PyMuPDF, so:
 1. **No layout / chrome from you.** Do not emit banners, side-tabs, section titles, or borders — the engine adds them. Do not compute x / y or page numbers.
 2. **Repeat regions must fit page 1.** `top_banner` / `meta_row` / `left_column` / `right_column` are repeated verbatim on every continuation page and are fixed on page 1. Keep the `left_column` info-cards (five cards, each viewBox ≈ 50 px, plus its engine-rendered label line) and the `right_column` blocks (Communication claims ≤ 4 lines + Performance Summary ≤ 16 lines, each with its label line) compact enough to fit one page. Only `middle_column` (`efficacy-table` / `consumer-block` / `custom`) paginates — emit one component per logical unit and let the engine overflow.
 3. **Right-column block caps.** Both blocks live in the fixed `right_column` (non-paginating): the `Communication` claims block keeps **≤ 4 bullet lines** (viewBox height ≤ ~80), and the `performance_summary` keeps **`OVERALL` plus one labeled line per present report type, totaling ≤ 16 text lines** (viewBox height ≤ ~280) at the right-column width (the engine adds a label title line on top of each); do not let them grow past one page. The `meta` component in `meta_row` is **one line** — never stack it.
-4. **Full data fidelity (CONVICTION_PERFORMANCE).** Emit one `efficacy-table` per study; include **every** finding and **every** metric with its JSON `color_code`. Before finalizing, count studies / findings / metrics in the JSON and verify the rendered `efficacy-table` count and row counts match exactly. Never sample, summarize, or omit CLINS / FE metrics; per-study `study_context` and `comparator_formulas` from the JSON must also be rendered when present — do not drop them. (CONSUMER_PERCEPTION may be summarized in natural language per the consumer rule below.) **Header layout rule:** in every `efficacy-table` and `consumer-block`, `study_context` is a dedicated second `<text>` line directly beneath the bold study title (font-size 10, fill #666) — never inline within the title text and never wrapped in parentheses there.
+4. **Full data fidelity (CONVICTION_PERFORMANCE).** Emit one `efficacy-table` per study; include **every** finding and **every** metric with its JSON `color_code`. Before finalizing, count studies / findings / metrics in the JSON and verify the rendered `efficacy-table` count and row counts match exactly. Never sample, summarize, or omit CLINS / FE metrics; per-study `study_context` and `comparator_formulas` from the JSON must also be rendered when present — do not drop them. (CONSUMER_PERCEPTION may be summarized in natural language per the consumer rule below.) **Header layout rule:** in every `efficacy-table` and `consumer-block`, `study_context` is a dedicated second `<text>` line directly beneath the bold study title (font-size 10, fill #666) — never inline within the title text and never wrapped in parentheses there. **Pre-output header audit (mandatory):** before closing the code block, count the study headers you rendered and verify EACH one contains exactly TWO separate header `<text>` elements — bold `study_name` at `y=20` + grey `study_context` at `y=45`. Any header whose context text sits inside the title `<text>` element is a defect: fix it before output.
 5. **Reference and zero hallucinating.** Every fact, value, or status claim you render must be traceable to the JSON. Render only what the JSON contains; mark missing fields `N/A`; never invent or recompute derived values.
 6. **Consumer color rule.** For `consumer-block` only, assign colors per the consumer code — green = positive (what we want to see), orange = cautious (attention needed), red = negative (action needed), neutral = no expressed positivity/negativity. AI assigns these for CE only.
 7. **Output exactly one markdown code block.** Your entire response is the single `` ```xml `` … `` ``` `` block containing the full `<deck>` XML. No markdown fences other than that one wrapping block, no prose, no explanations outside it.
