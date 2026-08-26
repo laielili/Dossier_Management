@@ -151,6 +151,7 @@ class Region:
     card_blank_lines: float = 4.0  # internal bottom blank reserved per card, in lines
     line_budget: float = 4.0  # content lines above this => "tall" field (protected)
     top_pad_lines: float = 1.0  # internal top padding per card, in lines
+    adaptive_anchor: bool = False  # clamp anchored items to the region bottom
     anchor: float = 0.0  # if > 0, the first item is flush at top and the rest
     # start at this fraction of the *full deck page* height (pushed down if
     # the top item is tall enough to overlap). Used by the right column.
@@ -444,6 +445,7 @@ class LayoutEngine:
                 card_blank_lines=float(data.get("card_blank_lines", 4)),
                 line_budget=float(data.get("line_budget", 4)),
                 top_pad_lines=float(data.get("top_pad_lines", 1)),
+                adaptive_anchor=bool(data.get("adaptive_anchor", False)),
                 anchor=float(data.get("anchor", 0.0)),
             )
         return regions
@@ -576,6 +578,9 @@ class LayoutEngine:
         if not items:
             return placed, items
 
+        if region.adaptive_anchor:
+            return self._fit_adaptive_anchor(region, items, gap)
+
         # When a region opts into distribution and all items fit with room to
         # spare, spread them across the full column height (space-between: the
         # first card sits flush under the section title and the leftover space
@@ -655,6 +660,114 @@ class LayoutEngine:
             )
             y += height
             remaining_height -= consumed
+
+        return placed, []
+
+    def _fit_adaptive_anchor(
+        self,
+        region: Region,
+        items: list[tuple[Component, float, float]],
+        gap: float | None = None,
+    ) -> tuple[list[PlacedComponent], list[tuple[Component, float, float]]]:
+        """Fit anchored right-column blocks without overlap or bottom overflow.
+
+        The template anchor remains the preferred position for the second block,
+        but a taller four-field Performance Summary can consume more of the fixed
+        repeat column. Move the anchor earlier as needed; if the blocks still do
+        not fit, compress them together rather than crossing the column boundary.
+        """
+        if gap is None:
+            gap = self.gap
+
+        content_top = region.content_y
+        content_bottom = region.content_y + region.content_h
+
+        # Measure from a pristine copy: the compression path (_compress) runs
+        # _build_first_page repeatedly over the same Component objects, so any
+        # in-place rewrite of comp.svg would compound across binary-search
+        # iterations. _fit_flex does the same via its `_orig_svg` backup.
+        for comp, _width, _h in items:
+            comp.attrs.setdefault("_orig_svg", comp.svg)
+
+        def measured(f: float) -> list[tuple[str, float]]:
+            result: list[tuple[str, float]] = []
+            for comp, width, _natural_h in items:
+                svg = scale_svg_fonts(comp.attrs["_orig_svg"], f) if f != 1.0 else comp.attrs["_orig_svg"]
+                w0, h0 = svg_natural_size(svg)
+                height = width * (h0 / w0) if w0 > 0 else 10.0
+                if comp.label and self.labels_enabled:
+                    height += self._label_height(f)
+                result.append((svg, height))
+            return result
+
+        metrics = measured(1.0)
+        total_h = sum(height for _svg, height in metrics) + (len(items) - 1) * gap
+        scale_floor = 0.65
+
+        if total_h > region.content_h:
+            lo, hi = scale_floor, 1.0
+            fitting: list[tuple[str, float]] | None = None
+            fitted_scale = scale_floor
+            for _ in range(20):
+                mid = (lo + hi) / 2.0
+                candidate = measured(mid)
+                candidate_h = sum(height for _svg, height in candidate)
+                candidate_h += (len(items) - 1) * gap
+                if candidate_h <= region.content_h:
+                    hi = mid
+                    fitting = candidate
+                    fitted_scale = mid
+                else:
+                    lo = mid
+
+            if fitting is None:
+                fitted_scale = scale_floor
+                fitting = measured(scale_floor)
+                total_h = sum(height for _svg, height in fitting)
+                total_h += (len(items) - 1) * gap
+                if total_h > region.content_h:
+                    # Let _build_first_page raise its normal repeat-region error.
+                    return [], items
+
+            metrics = fitting
+            for item, (svg, _height) in zip(items, metrics):
+                item[0].svg = svg
+            warning = (
+                f"Region '{region.name}' was auto-fitted to {fitted_scale:.2f}× "
+                "to keep its repeat-region blocks inside the column."
+            )
+            if warning not in self.warnings:
+                self.warnings.append(warning)
+
+        anchor_y = max(
+            content_top,
+            min(region.anchor * self.canvas_height, content_bottom),
+        )
+        placed: list[PlacedComponent] = []
+        previous_bottom = content_top
+
+        for idx, (item, (svg, height)) in enumerate(zip(items, metrics)):
+            comp = item[0]
+            width = item[1]
+            preferred_y = content_top if idx == 0 else max(anchor_y, previous_bottom + gap)
+            latest_y = content_bottom - height
+            minimum_y = content_top if idx == 0 else previous_bottom + gap
+            target_y = min(preferred_y, latest_y)
+            if target_y + 1e-6 < minimum_y:
+                return [], items[idx:]
+
+            comp.svg = svg
+            placed.append(
+                PlacedComponent(
+                    component=comp,
+                    region=region.name,
+                    x=region.inner_x,
+                    y=target_y,
+                    w=width,
+                    h=height,
+                )
+            )
+            previous_bottom = target_y + height
 
         return placed, []
 

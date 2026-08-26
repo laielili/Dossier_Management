@@ -85,7 +85,8 @@
       "background": "#ffffff",
       "show_border": true,
       "padding": [8, 10, 8, 10],
-      "anchor": 0.5
+      "anchor": 0.5,
+      "adaptive_anchor": true
     }
   },
   "chrome": {

@@ -60,6 +60,7 @@ _trash/
 
 # ---------- WorkBuddy local workspace memory (not for VCS) ----------
 .workbuddy/
+.claude
 
 # ---------- User-configured path configs (machine-specific) ----------
 listen_folder.txt
