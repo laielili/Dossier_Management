@@ -163,17 +163,13 @@
     </svg>
   </component>
   <component type="summary-block" label="Performance Summary">
-    <svg viewBox="0 0 380 200" width="380" height="200">
-      <text x="12" y="20" font-size="11" fill="#333">[SUMMARY_LINE_1]</text>
-      <text x="12" y="38" font-size="11" fill="#333">[SUMMARY_LINE_2]</text>
-      <text x="12" y="56" font-size="11" fill="#333">[SUMMARY_LINE_3]</text>
-      <text x="12" y="74" font-size="11" fill="#333">[SUMMARY_LINE_4]</text>
-      <text x="12" y="92" font-size="11" fill="#333">[SUMMARY_LINE_5]</text>
-      <text x="12" y="110" font-size="11" fill="#333">[SUMMARY_LINE_6]</text>
-      <text x="12" y="128" font-size="11" fill="#333">[SUMMARY_LINE_7 - includes numeric claim]</text>
-      <text x="12" y="146" font-size="11" fill="#333">[SUMMARY_LINE_8]</text>
-      <text x="12" y="164" font-size="11" fill="#333">[SUMMARY_LINE_9 - includes numeric claim]</text>
-      <text x="12" y="182" font-size="11" fill="#333">[SUMMARY_LINE_10]</text>
+    <svg viewBox="0 0 380 160" width="380" height="160">
+      <text x="12" y="20" font-size="11" fill="#333"><tspan font-weight="bold">OVERALL:</tspan> [OVERALL_SENTENCE_1]</text>
+      <text x="12" y="38" font-size="11" fill="#333">[OVERALL_SENTENCE_2]</text>
+      <text x="12" y="56" font-size="11" fill="#333">[OVERALL_SENTENCE_3]</text>
+      <text x="12" y="82" font-size="11" fill="#333"><tspan font-weight="bold">CLINICAL:</tspan> [CLINS_SENTENCE_WITH_KEY_METRIC] <tspan font-weight="bold" fill="#2e7d32">[-XX.XX% AT T12W]</tspan>.</text>
+      <text x="12" y="108" font-size="11" fill="#333"><tspan font-weight="bold">SENSORY:</tspan> [FE_SENTENCE_WITH_KEY_METRIC] <tspan font-weight="bold" fill="#2e7d32">[+XXX.XX% AT T1H]</tspan>.</text>
+      <text x="12" y="134" font-size="11" fill="#333"><tspan font-weight="bold">CONSUMER:</tspan> <tspan font-weight="bold" fill="#2e7d32">[XX.X% ACCEPTANCE]</tspan> [CE_SENTENCE]; <tspan font-weight="bold" fill="#e07b00">[XX.X% NEEDS ATTENTION]</tspan>.</text>
     </svg>
   </component>
 </deck>
