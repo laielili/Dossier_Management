@@ -705,6 +705,8 @@ class LayoutEngine:
         scale_floor = 0.65
 
         if total_h > region.content_h:
+            # Find the LARGEST scale in [floor, 1.0] that fits (same convention
+            # as _fit_flex's compression steps: fit -> try a larger scale).
             lo, hi = scale_floor, 1.0
             fitting: list[tuple[str, float]] | None = None
             fitted_scale = scale_floor
@@ -714,11 +716,11 @@ class LayoutEngine:
                 candidate_h = sum(height for _svg, height in candidate)
                 candidate_h += (len(items) - 1) * gap
                 if candidate_h <= region.content_h:
-                    hi = mid
+                    lo = mid
                     fitting = candidate
                     fitted_scale = mid
                 else:
-                    lo = mid
+                    hi = mid
 
             if fitting is None:
                 fitted_scale = scale_floor
@@ -916,11 +918,13 @@ class LayoutEngine:
             y += h
 
         if overrun:
-            self.warnings.append(
+            warning = (
                 f"Region '{region.name}' overflows the column even at the "
                 f"compression floor; cards extend beyond the column edge. "
                 f"Reduce content or raise the column height."
             )
+            if warning not in self.warnings:
+                self.warnings.append(warning)
 
         return placed, []
 
@@ -1004,11 +1008,29 @@ class LayoutEngine:
         sized: dict[str, list[tuple[Component, float, float]]],
         f: float,
     ) -> dict[str, list[tuple[Component, float, float]]]:
-        """Clone ``sized`` with the overflow region density-scaled by ``f``."""
+        """Clone ``sized`` with the overflow region density-scaled by ``f``.
+
+        Non-overflow regions are cloned per iteration too (seeded from each
+        component's pristine ``_orig_svg`` when present): adaptive/flex regions
+        rewrite ``comp.svg`` in place during ``_build_first_page``, and the
+        binary search keeps the pages of ONE iteration while later iterations
+        keep overwriting the shared Component objects. Cloning decouples the
+        returned placements from those later overwrites so the rendered SVG
+        always matches the placement geometry.
+        """
         out: dict[str, list[tuple[Component, float, float]]] = {}
         for name, items in sized.items():
             if name != self.overflow_region:
-                out[name] = list(items)
+                cloned_items: list[tuple[Component, float, float]] = []
+                for comp, width, height in items:
+                    new_comp = Component(
+                        type=comp.type,
+                        svg=comp.attrs.get("_orig_svg", comp.svg),
+                        label=comp.label,
+                        attrs=dict(comp.attrs),
+                    )
+                    cloned_items.append((new_comp, width, height))
+                out[name] = cloned_items
                 continue
             scaled_items: list[tuple[Component, float, float]] = []
             for comp, _, _ in items:
