@@ -56,7 +56,12 @@ class RenderResult:
 
 @dataclass
 class TextSpan:
-    """A single editable text line extracted from a component SVG (viewBox units)."""
+    """A single editable text line extracted from a component SVG (viewBox units).
+
+    ``runs`` holds the line split per inner ``<tspan>`` so per-fragment
+    color/weight survive into the editable PPTX text box. ``text``, ``fill``
+    and ``weight`` stay as the plain-line fallback for measurement helpers.
+    """
 
     x: float
     y: float
@@ -66,6 +71,7 @@ class TextSpan:
     anchor: str
     text: str
     font_family: str = ""
+    runs: list[tuple[str, str, str]] | None = None  # (text, fill, weight)
 
 
 class DeckRenderer:
@@ -420,6 +426,42 @@ class DeckRenderer:
             anchor = (_val("text-anchor") or "start").strip().lower()
             family = (_val("font-family") or root_family or "").strip()
 
+            # Split the line into runs per inner <tspan> so each fragment
+            # keeps its own color/weight in the editable text box. Fragments
+            # without explicit attributes inherit the <text> defaults.
+            runs: list[tuple[str, str, str]] = []
+            pos = 0
+            for tspan_m in re.finditer(
+                r"<tspan\b([^>]*)>([\s\S]*?)</tspan>", inner, re.IGNORECASE
+            ):
+                head = inner[pos:tspan_m.start()]
+                if re.sub(r"<[^>]+>", "", head).strip():
+                    runs.append((re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", head))).strip(),
+                                 fill, weight))
+                t_attrs = dict(self._ATTR_RE.findall(tspan_m.group(1)))
+                t_style = t_attrs.get("style", "")
+
+                def _tval(key: str) -> str | None:
+                    return t_attrs.get(key) or self._style_value(t_style, key)
+
+                t_fill = (_tval("fill") or fill).strip()
+                if t_fill in ("none", "transparent") or t_fill.startswith("url("):
+                    t_fill = fill
+                t_weight = (_tval("font-weight") or weight).strip().lower()
+                t_text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", tspan_m.group(2)))).strip()
+                if t_text:
+                    runs.append((t_text, t_fill, t_weight))
+                pos = tspan_m.end()
+            tail = inner[pos:]
+            if re.sub(r"<[^>]+>", "", tail).strip():
+                runs.append((re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", tail))).strip(),
+                             fill, weight))
+            if not runs:
+                runs = [(text, fill, weight)]
+            elif len(runs) == 1:
+                # Single run: normalize to the plain-line values.
+                runs = [(text, fill, weight)]
+
             spans.append(
                 TextSpan(
                     x=float(attrs.get("x", "0") or 0) + dx,
@@ -430,6 +472,7 @@ class DeckRenderer:
                     anchor=anchor,
                     text=text,
                     font_family=family,
+                    runs=runs,
                 )
             )
         return spans
@@ -681,7 +724,7 @@ class DeckRenderer:
             # ragged content width with the card's shared block width.
             width = min(max(force_width, 1), w_total - left)
 
-        font_pt = self._fit_font_pt(span.text, font_pt, width, bold, family)
+        font_pt = self._fit_runs_font_pt(span, font_pt, width, family)
         # Line height: prefer the SVG's actual gap to the next baseline so
         # tightly-packed bullets never overlap; cap at 1.3x font and keep at
         # least 1.0x so the glyph is not clipped.
@@ -717,7 +760,30 @@ class DeckRenderer:
             text=span.text,
             alignment=align,
             font_family=family,
+            runs=span.runs,
         )
+
+    def _fit_runs_font_pt(
+        self, span: TextSpan, font_pt: float, box_width_emu: int, family: str
+    ) -> float:
+        """Run-aware variant of _fit_font_pt: measure per-fragment width sum.
+
+        Uses span.runs (text/fill/weight fragments) when present so bold
+        colored tspans are measured with their own weight; falls back to the
+        plain line otherwise.
+        """
+        runs = span.runs or [(span.text, span.fill, span.weight)]
+        if box_width_emu <= 0:
+            return font_pt
+        total = 0.0
+        for r_text, _, r_weight in runs:
+            r_bold = r_weight in ("bold", "bolder", "700", "800", "900")
+            total += self._estimate_text_width_pt(r_text, font_pt, r_bold, family)
+        avail_w_pt = box_width_emu / 12700.0
+        if total <= avail_w_pt:
+            return font_pt
+        scale = (avail_w_pt / total) * 0.95
+        return max(font_pt * scale, font_pt * 0.6)
 
     def _fit_font_pt(
         self, text: str, font_pt: float, box_width_emu: int, bold: bool, family: str
@@ -823,12 +889,14 @@ class DeckRenderer:
         text: str,
         alignment: PP_ALIGN | None = None,
         font_family: str = "",
+        runs: list[tuple[str, str, str]] | None = None,
     ) -> None:
         """Add a transparent, non-wrapping editable text box to the group.
 
         Only python-pptx's public API is used (no hand-written XML); the font
         family maps to the plain latin typeface so the rendered width matches
-        the metrics used for pre-shrinking.
+        the metrics used for pre-shrinking. ``runs`` optionally carries
+        (text, fill, weight) fragments so per-tspan colors survive.
         """
         box = group.shapes.add_textbox(left_emu, top_emu, width_emu, height_emu)
         tf = box.text_frame
@@ -844,18 +912,27 @@ class DeckRenderer:
         if alignment is not None:
             paragraph.alignment = alignment
 
-        run = paragraph.add_run()
-        run.text = text
-        font = run.font
-        font.size = Pt(max(font_pt, 1.0))
-        font.bold = weight in ("bold", "bolder", "700", "800", "900")
-        try:
-            font.color.rgb = RGBColor.from_string(fill.lstrip("#"))
-        except ValueError:
-            pass
-        family = font_family.split(",")[0].strip()
-        if family:
-            font.name = family
+        def _style_run(run: Any, r_fill: str, r_weight: str) -> None:
+            font = run.font
+            font.size = Pt(max(font_pt, 1.0))
+            font.bold = r_weight in ("bold", "bolder", "700", "800", "900")
+            try:
+                font.color.rgb = RGBColor.from_string(r_fill.lstrip("#"))
+            except ValueError:
+                pass
+            fam = font_family.split(",")[0].strip()
+            if fam:
+                font.name = fam
+
+        if runs:
+            for r_text, r_fill, r_weight in runs:
+                run = paragraph.add_run()
+                run.text = r_text
+                _style_run(run, r_fill, r_weight)
+        else:
+            run = paragraph.add_run()
+            run.text = text
+            _style_run(run, fill, weight)
 
     # ------------------------------------------------------------------
     # Inline preview

@@ -162,6 +162,9 @@ const ovRightFontVal = $("ov-right-font-val");
       max_pages: parseInt(maxPages.value, 10) || 0,
       dpi: parseInt($("dpi").value, 10) || 150,
       editable: currentEditable(),
+      // Build with the same font/theme overrides as Re-render, so the
+      // downloaded deck always matches what the preview showed.
+      ...collectOverrides(),
     };
 
     resultCard.classList.add("hidden");
@@ -308,6 +311,7 @@ const ovRightFontVal = $("ov-right-font-val");
     };
     log("Re-rendering with overrides…");
     btnRerender.disabled = true;
+    if (btnDownload) btnDownload.disabled = true;
     try {
       const resp = await fetch("/svg2ppt/build", {
         method: "POST",
@@ -325,6 +329,7 @@ const ovRightFontVal = $("ov-right-font-val");
       log("Network error: " + e.message);
     } finally {
       btnRerender.disabled = false;
+      if (btnDownload) btnDownload.disabled = false;
     }
   }
 
