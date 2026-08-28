@@ -550,6 +550,7 @@ function getProfilesFromUI() {
     CLINS: $("#profile-CLINS").value.trim(),
     FE: $("#profile-FE").value.trim(),
     CE: $("#profile-CE").value.trim(),
+    INSTRUMENTAL: $("#profile-INSTRUMENTAL").value.trim(),
   };
 }
 

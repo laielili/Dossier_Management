@@ -32,7 +32,7 @@ CLASSIFY_DIR = DATA_DIR / "inbox"
 CLASSIFY_PROFILE_DIR = PROJECT_ROOT / "classify"
 
 # --- Report type subdirectories ---
-REPORT_TYPES = ["CLINS", "FE", "CE"]
+REPORT_TYPES = ["CLINS", "FE", "CE", "INSTRUMENTAL"]
 
 
 def get_search_paths() -> list[str]:
@@ -95,6 +95,7 @@ REPORT_TYPE_LABELS = {
     "CLINS": "Clinical",
     "FE": "Sensory",
     "CE": "Consumer Evaluation",
+    "INSTRUMENTAL": "Instrumental",
 }
 
 # --- PDF parsing ---
@@ -280,6 +281,13 @@ DEFAULT_QUERIES: dict[str, str] = {
         "tolerance satisfaction self-assessment instrumental measurement "
         "statistical analysis primary endpoint results conclusion"
     ),
+    "INSTRUMENTAL": (
+            "instrumental measurement corneometer tewameter primos skin hydration "
+            "transepidermal water loss barrier function roughness elasticity firmness "
+            "biophysical skin properties objective assessment before after treatment "
+            "角质层水分 经皮水分流失 皮肤屏障功能 粗糙度 弹性 坚韧度 生物物理 "
+            "仪器测量 客观测量 皮肤生物物理参数 角质计 经表皮水分流失仪 皮肤成像分析"
+        ),
 }
 
 # --- Document-type classification (auto-sort uploaded PDFs) -----------
@@ -311,6 +319,16 @@ DEFAULT_CLASSIFY_PROFILES: dict[str, str] = {
         "questionnaire, satisfaction, perception, consumer feedback, claim "
         "substantiation, panelist. Measures consumer opinion and behavior at scale."
     ),
+    "INSTRUMENTAL": (
+            "Instrumental report. First page identifies instrumental measurement, "
+            "biophysical assessment, or skin property analysis. Contains terms: "
+            "corneometer, tewameter, primos, skin hydration, transepidermal water loss, "
+            "TEWL, barrier function, roughness, elasticity, firmness, biophysical, "
+            "instrumental, objective measurement, skin properties. Measures skin "
+            "biophysical parameters under controlled conditions. "
+            "角质层水分, 经皮水分流失, 皮肤屏障功能, 粗糙度, 弹性, 坚韧度, 生物物理, "
+            "仪器测量, 客观测量, 皮肤生物物理参数, 角质计, 经表皮水分流失仪, 皮肤成像分析"
+        ),
 }
 
 # --- PDF output ---

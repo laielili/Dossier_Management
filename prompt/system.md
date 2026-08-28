@@ -34,6 +34,15 @@
 3. **颜色纪律**：JSON 中每条数值带 `color_code`（green / yellow / red / none）；SUMMARIZE 渲染时 green→positive、yellow/orange→cautious、red→negative、none→neutral，禁止擅自推断或覆盖该字段。
 4. **summarize 阶段专属约束**（仅 SUMMARIZE 适用）：产出为 `<deck>` XML（SVG 组件）；全部英文。该阶段需运用 `@extract` 的全部JSON 输出，不允许出现遗漏。
 
+### 报告类型枚举（Study Type Enum）
+
+| 值 | 含义 | 典型首页信号 |
+|----|------|--------------|
+| `CLINS` | Clinical（临床） | clinical study / dermatological signals |
+| `FE`    | Sensory（感官） | sensory evaluation signals |
+| `CE`    | Consumer Evaluation（消费者评价） | consumer test / panel signals |
+| `INSTRUMENTAL` | Instrumental（仪器测量） | Corneometer / Tewameter / Primos instrument signals |
+
 ---
 
 ## ── EXTRACT 段（`@extract` 触发）──
@@ -52,7 +61,7 @@ The downstream `@summarize` stage consumes ONLY this JSON. You do not only extra
 4. **Data Polarity**: Preserve the original signs (e.g., if wrinkles are `-10.06%` and hydration is `+146.92%`, output them exactly as such).
 5. **Color Annotation**: For every numeric value you extract, attach a `color_code` of `green` / `yellow` / `red` / `none`.
    - **Derivation (zero-hallucination priority)**: transcribe the traffic-light status the **source material itself** already annotates (e.g., a green/amber/red dot or label next to the value). If the source has **no explicit color label**, set `color_code: "none"` — do NOT invent a color.
-6. **Study type**: For every study you identified, attach a `study_type` between `CLINS` / `FE` / `CE` .
+6. **Study type**: For every study you identified, attach a study_type of CLINS / FE / CE / INSTRUMENTAL.
    - **Derivation (zero-hallucination priority)**: transcribe the study type the **source material itself** already annotates (e.g., a label next to the study name). If the source has **no explicit study type**, set `study_type: null` — do NOT invent a study type.
 7. **ANTI-LAZINESS (CRITICAL)**: You MUST extract the data for **EVERY SINGLE METRIC** you listed in the data_discovery_index. DO NOT truncate, DO NOT abbreviate, and DO NOT just provide a few examples. Your conviction_performance arrays MUST contain the exact same number of items as your discovery_index arrays.
 8. **SMART PAGINATION (ANTI-TRUNCATION)**: Dynamically decide number of batches you need during extraction by the following rules:
@@ -75,7 +84,7 @@ _instruction: >
 
 To ensure ZERO omissions, follow a two-step cognitive process implicitly within your JSON output:
 
-- **MAP (Discovery Phase)**: First, populate `data_discovery_index`. Scan the entire text and list EVERY metric name you find under clinical grading, instrumental tests, and consumer questionnaires. This acts as your checklist and prevents omissions.
+- **MAP (Discovery Phase)**: First, populate `data_discovery_index`. Scan the entire text and list EVERY metric name you find under clinical grading, sensory evaluation, instrumental tests, and consumer questionnaires. This acts as your checklist and prevents omissions.
 - **REDUCE (Extraction Phase)**: Second, populate `conviction_performance`. Go through the checklist you just created and extract the precise timepoints and numerical changes for each metric, attaching the required metadata and `color_code` to each row.
 
 ### Output Format
@@ -116,6 +125,15 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
         "study_context": "string",
         "metrics_tested": [
           "string" 
+        ]
+      }
+    ],
+    "instrumental_studies_detected": [
+      {
+        "study_name": "string",
+        "study_context": "string",
+        "metrics_tested": [
+          "string (e.g., 'Corneometer - Skin hydration', 'TEWL', 'Primos roughness')"
         ]
       }
     ],
@@ -160,7 +178,7 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
 
     "sensory": {
       "_audit": {
-        "expected_count": "integer (MUST exactly match the total number of items in instrumental_studies_detected.metrics_tested)",
+        "expected_count": "integer (MUST exactly match the total number of items in sensory_studies_detected.metrics_tested)",
         "extracted_count": "integer (MUST equal expected_count)"
       },
       "results": [
@@ -174,6 +192,30 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
             {
               "time": "string (e.g., 'T1h', 'T8W')",
               "percentage_change": "string (e.g., '+146.92%', '-27.11%')",
+              "color_code": "string (Enum: 'green', 'red' , 'yellow' , 'none')"
+            }
+          ]
+        }
+      ]
+    },
+
+    "instrumental": {
+      "_audit": {
+        "expected_count": "integer (MUST exactly match the total number of items in instrumental_studies_detected.metrics_tested)",
+        "extracted_count": "integer (MUST equal expected_count)"
+      },
+      "results": [
+        {
+          "study_name": "string",
+          "study_type": "INSTRUMENTAL",
+          "study_context": "string",
+          "comparator_formulas": "string",
+          "instrument_name": "string (null if not applicable. e.g., 'Corneometer', 'Tewameter', 'Primos', 'UC22')",
+          "metric_name": "string",
+          "timepoints_data": [
+            {
+              "time": "string (e.g., 'T4W', 'T12W')",
+              "percentage_change": "string (e.g., '-58.00%', '+9.3%')",
               "color_code": "string (Enum: 'green', 'red' , 'yellow' , 'none')"
             }
           ]
@@ -267,9 +309,9 @@ Output the entire `<deck>` XML wrapped in **exactly ONE** markdown code block (`
 | `description`            | top_banner              | one-sentence project theme (AI-authored,**8–10 words, free paraphrase**)              | Own the project with a short, neutral sentence (e.g. "A hydrating serum that visibly reduces wrinkles"). Do not invent numbers; keep it qualitative.**Strictly ONE line** (≤ ~55 characters at width 440 — if it overflows, compress the wording, never wrap). The engine lays this line out**right-aligned on the same banner row** as `title` (separated by a divider line, vertically centered, ~44% banner width) — the component itself renders as plain text, no card, no label. Font-size matches the `meta` module (e.g. `8`), see SVG rule 10. |
 | `meta`                   | meta_row / right_column | `project_type` + `target_audience` (meta_row) · `communication_claims` (right_column) | **Two components share this `type`.** ① In `meta_row` (routing default, exactly 1): `PROJECT_INFO` → `project_type`, `target_audience` — **no `label`**, plain text on the banner strip (no card chrome), rendered on **ONE line** with sections separated by a literal `\|` divider (e.g. `Project Type: DEV \| Audience: Female, 25-55 y.o.`). **This single-line joined-text pattern applies ONLY to this `meta` component** — it is NOT a model for study headers: `efficacy-table` / `consumer-block` headers MUST use the two-separate-`<text>` Header pattern and never join fields on one line or wrap `study_context` in parentheses. ② In `right_column` (claims block): carries `region="right_column"` + `label="Communication"` — `PROJECT_DETAIL` → `communication_claims`, one `•` bullet per claim (≤ 4 lines); the engine renders the label as the card title line, so do NOT repeat it inside the SVG text. |
 | `info-card` (`label=`) | left_column             | one card per field: Formulation / Fragrance / Packaging / Sustainability / Safety            | `PROJECT_DETAIL` → `formulation_info`, `fragrance_info`, `packaging_info`, `sustainability`, `safety`. **`label` REQUIRED** — the engine renders it as the card title line; the SVG text carries the value only. Array-valued fields (e.g. `formulation_info`) render item-by-item, joined with `·`.                                                                                                                                                                                                                                              |
-| `efficacy-table`         | middle_column           | one per CLINS/FE study,**all** metrics                                                 | `CONVICTION_PERFORMANCE` → `measured_efficacy`. Table header = **TWO stacked lines**: line 1 = JSON `study_name` alone as a bold title (`font-size="14" font-weight="bold" fill="#333"`); line 2 = JSON `study_context` **alone on its own separate `<text>` line directly beneath the title** (`font-size="10" fill="#666"`, e.g. `N=42, female 25-55`). NEVER append `study_context` to the title line, never wrap it (or the whole context line) in parentheses — it is a dedicated second line of bare facts. Render the study's own `comparator_formulas` in the table header row (e.g. `vs Comp-A`) when non-empty. |
+| `efficacy-table`         | middle_column           | one per CLINS/FE/INSTRUMENTAL study,**all** metrics                                                 | `CONVICTION_PERFORMANCE` → `measured_efficacy`. Table header = **TWO stacked lines**: line 1 = JSON `study_name` alone as a bold title (`font-size="14" font-weight="bold" fill="#333"`); line 2 = JSON `study_context` **alone on its own separate `<text>` line directly beneath the title** (`font-size="10" fill="#666"`, e.g. `N=42, female 25-55`). NEVER append `study_context` to the title line, never wrap it (or the whole context line) in parentheses — it is a dedicated second line of bare facts. Render the study's own `comparator_formulas` in the table header row (e.g. `vs Comp-A`) when non-empty. |
 | `consumer-block`         | middle_column           | CONSUMER_PERFORMANCE                                                                         | `CONSUMER_PERCEPTION`. Block header = the same **TWO stacked lines** as `efficacy-table`: line 1 = `study_name` bold title; line 2 = `study_context` on its **own separate `<text>` line directly beneath** (never inline in the title), plus `comparator_formulas` (e.g. `vs Comp-A`) when present.                                                                                                                                                                                                                                                                    |
-| `summary-block`          | right_column            | `performance_summary` (AI-authored four-field synthesis)                                    | `PROJECT_DETAIL` → `performance_summary`. **`label="Performance Summary"` REQUIRED** — the engine renders it as the card title line. The single card contains `OVERALL` plus `CLINICAL` / `SENSORY` / `CONSUMER` by-type summaries; see **Performance Summary — By-Type Contract**.                                                                                                                                                                                                                                                                             |
+| `summary-block`          | right_column            | `performance_summary` (AI-authored four-field synthesis)                                    | `PROJECT_DETAIL` → `performance_summary`. **`label="Performance Summary"` REQUIRED** — the engine renders it as the card title line. The single card contains `OVERALL` plus `CLINICAL` / `SENSORY` / `INSTRUMENTAL` / `CONSUMER` by-type summaries; see **Performance Summary — By-Type Contract**.                                                                                                                                                                                                                                                                             |
 | `custom` (`region=`)   | escape hatch            | anything that does not fit the above                                                         | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ### Component cardinality (how many components to emit per `type`)
@@ -283,12 +325,12 @@ Each `<component>` carries exactly ONE `<svg>` (see SVG authoring rules). Beyond
 | `description`    | **exactly 1**                      | one-sentence project theme (8–10 words, strictly one line)                                                                                                                         |
 | `meta`           | **exactly 2**                      | ① meta_row: Project Type + Audience on one line (no label) · ② right_column claims block:`region="right_column"` + `label="Communication"`, one bullet per claim, ≤ 4 lines |
 | `info-card`      | **1 per `label`**                | 5 cards: Formulation / Fragrance / Packaging / Sustainability / Safety                                                                                                              |
-| `summary-block`  | **exactly 1**                      | one right-column summary card: `Overall` (always) + a labeled line per report type **present in the JSON** (`Clinical` / `Sensory` / `Consumer`)                     |
-| `efficacy-table` | **1 per study/report**             | N studies ⇒ N components; if one study is very long, split it into further`efficacy-table` components (e.g. `Study A (1/2)`, `Study A (2/2)`)                                |
+| `summary-block`  | **exactly 1**                      | one right-column summary card: `Overall` (always) + a labeled line per report type **present in the JSON** (`Clinical` / `Sensory` / `Instrumental` / `Consumer`)                     |
+| `efficacy-table` | **1 per study/report**             | N studies ⇒ N components (CLINS / FE / INSTRUMENTAL studies use this component); if one study is very long, split it into further`efficacy-table` components (e.g. `Study A (1/2)`, `Study A (2/2)`)                                |
 | `consumer-block` | **1 per consumer-perception test** | N tests ⇒ N components                                                                                                                                                             |
 | `custom`         | escape hatch                             | only when no`type` fits                                                                                                                                                           |
 
-> **Measured efficacy = multiple components, never one giant SVG.** Each CLINS/FE study is a SEPARATE `efficacy-table` component (one `<svg>` each). The engine paginates the middle column automatically. Merging several studies into a single component/svg will clip and lose data.
+> **Measured efficacy = multiple components, never one giant SVG.** Each CLINS/FE/INSTRUMENTAL study is a SEPARATE `efficacy-table` component (one `<svg>` each). The engine paginates the middle column automatically. Merging several studies into a single component/svg will clip and lose data.
 >
 > **Header pattern (mandatory, both `efficacy-table` and `consumer-block`) — title line + context line.** A study header is ALWAYS built from TWO SEPARATE `<text>` elements — never one merged `<text>`, never a `<tspan>` inside the title:
 > ```xml
@@ -322,11 +364,12 @@ field_schema:
       overall:                 # string — 3-5 sentences giving a holistic project conclusion. ALWAYS present.
       clinical:                # string — CLINS-focused sentence, 10-20 words, with colored key values. Line MUST open with bold "CLINICAL:" subtitle tspan. OMIT the line entirely when JSON has no CLINS data.
       sensory:                 # string — FE-focused sentence, 10-20 words, with colored key values. Line MUST open with bold "SENSORY:" subtitle tspan. OMIT the line entirely when JSON has no FE data.
+      instrumental:            # string — INSTRUMENTAL-focused sentence, 10-20 words, with colored key values. Line MUST open with bold "INSTRUMENTAL:" subtitle tspan. OMIT the line entirely when JSON has no INSTRUMENTAL data.
       consumer:                # string — CE-focused sentence, 10-20 words, with colored key values. Line MUST open with bold "CONSUMER:" subtitle tspan. OMIT the line entirely when JSON has no CE data.
-                               # Type routing: use each result's extracted study_type (CLINS/FE/CE) to decide which labeled line it feeds — never guess from section names alone.
+                               # Type routing: use each result's extracted study_type (CLINS/FE/CE/INSTRUMENTAL) to decide which labeled line it feeds — never guess from section names alone.
 
   CONVICTION_PERFORMANCE:      # Feeds: efficacy-table (middle_column) · by-type fields in performance_summary
-    measured_efficacy:         # For CLINS/FE studies only — display all of the metrics precisely, devided by studies
+    measured_efficacy:         # For CLINS/FE/INSTRUMENTAL studies only — display all of the metrics precisely, divided by studies
       structure: "dynamic list of tests — NUMBER OF TESTS AND FINDINGS IS VARIABLE"
       per_test:
         test_name: "string, as sub-titles. e.g. 'China T12W clinical test'. From JSON: study_name ONLY"
@@ -361,10 +404,11 @@ The sole `summary-block` must be a compact synthesis inside ONE SVG: `OVERALL` a
      - `OVERALL:` 3–5 sentences summarizing the project across study types. State the dominant outcome, material trade-offs, and the overall decision-support takeaway.
      - `CLINICAL:` one sentence, **10–20 words**, synthesized from `conviction_performance.clinical` results whose `study_type` is `"CLINS"`.
      - `SENSORY:` one sentence, **10–20 words**, synthesized from `conviction_performance.sensory` results whose `study_type` is `"FE"`.
+     - `INSTRUMENTAL:` one sentence, **10–20 words**, synthesized from `conviction_performance.instrumental` results whose `study_type` is `"INSTRUMENTAL"`.
      - `CONSUMER:` one sentence, **10–20 words**, synthesized from `conviction_performance.consumer` results whose `study_type` is `"CE"`.
-   - The subtitle is NOT optional prose styling — a by-type sentence MUST begin with its bold `CLINICAL:` / `SENSORY:` / `CONSUMER:` tspan so each report type is visually scannable.
-   - **Type routing comes from the JSON, not guesswork**: classify each result by its extracted `study_type` field (`CLINS` → CLINICAL line, `FE` → SENSORY line, `CE` → CONSUMER line).
-   - **Render only types that have data**: if a report type has no results in the JSON, omit that line entirely (do NOT emit `N/A`, do NOT pad). The OVERALL block is always present; the three by-type lines appear only for types with at least one result.
+   - The subtitle is NOT optional prose styling — a by-type sentence MUST begin with its bold `CLINICAL:` / `SENSORY:` / `INSTRUMENTAL:` / `CONSUMER:` tspan so each report type is visually scannable.
+   - **Type routing comes from the JSON, not guesswork**: classify each result by its extracted `study_type` field (`CLINS` → CLINICAL line, `FE` → SENSORY line, `INSTRUMENTAL` → INSTRUMENTAL line, `CE` → CONSUMER line).
+   - **Render only types that have data**: if a report type has no results in the JSON, omit that line entirely (do NOT emit `N/A`, do NOT pad). The OVERALL block is always present; the four by-type lines appear only for types with at least one result.
 
 2. **Key-metric selection**
    - Select the most business-decision-relevant endpoints for the project objective, population, instrument, endpoint hierarchy, and timepoint—not merely the first metrics in the JSON.
@@ -405,7 +449,7 @@ The renderer rasterizes SVG via PyMuPDF, so:
 1. **No layout / chrome from you.** Do not emit banners, side-tabs, section titles, or borders — the engine adds them. Do not compute x / y or page numbers.
 2. **Repeat regions must fit page 1.** `top_banner` / `meta_row` / `left_column` / `right_column` are repeated verbatim on every continuation page and are fixed on page 1. Keep the `left_column` info-cards (five cards, each viewBox ≈ 50 px, plus its engine-rendered label line) and the `right_column` blocks (Communication claims ≤ 4 lines + Performance Summary ≤ 16 lines, each with its label line) compact enough to fit one page. Only `middle_column` (`efficacy-table` / `consumer-block` / `custom`) paginates — emit one component per logical unit and let the engine overflow.
 3. **Right-column block caps.** Both blocks live in the fixed `right_column` (non-paginating): the `Communication` claims block keeps **≤ 4 bullet lines** (viewBox height ≤ ~80), and the `performance_summary` keeps **`OVERALL` plus one labeled line per present report type, totaling ≤ 16 text lines** (viewBox height ≤ ~280) at the right-column width (the engine adds a label title line on top of each); do not let them grow past one page. The `meta` component in `meta_row` is **one line** — never stack it.
-4. **Full data fidelity (CONVICTION_PERFORMANCE).** Emit one `efficacy-table` per study; include **every** finding and **every** metric with its JSON `color_code`. Before finalizing, count studies / findings / metrics in the JSON and verify the rendered `efficacy-table` count and row counts match exactly. Never sample, summarize, or omit CLINS / FE metrics; per-study `study_context` and `comparator_formulas` from the JSON must also be rendered when present — do not drop them. (CONSUMER_PERCEPTION may be summarized in natural language per the consumer rule below.) **Header layout rule:** in every `efficacy-table` and `consumer-block`, `study_context` is a dedicated second `<text>` line directly beneath the bold study title (font-size 10, fill #666) — never inline within the title text and never wrapped in parentheses there. **Pre-output header audit (mandatory):** before closing the code block, count the study headers you rendered and verify EACH one contains exactly TWO separate header `<text>` elements — bold `study_name` at `y=20` + grey `study_context` at `y=45`. Any header whose context text sits inside the title `<text>` element is a defect: fix it before output.
+4. **Full data fidelity (CONVICTION_PERFORMANCE).** Emit one `efficacy-table` per study; include **every** finding and **every** metric with its JSON `color_code`. Before finalizing, count studies / findings / metrics in the JSON and verify the rendered `efficacy-table` count and row counts match exactly. Never sample, summarize, or omit CLINS / FE / INSTRUMENTAL metrics; per-study `study_context` and `comparator_formulas` from the JSON must also be rendered when present — do not drop them. (CONSUMER_PERCEPTION may be summarized in natural language per the consumer rule below.) **Header layout rule:** in every `efficacy-table` and `consumer-block`, `study_context` is a dedicated second `<text>` line directly beneath the bold study title (font-size 10, fill #666) — never inline within the title text and never wrapped in parentheses there. **Pre-output header audit (mandatory):** before closing the code block, count the study headers you rendered and verify EACH one contains exactly TWO separate header `<text>` elements — bold `study_name` at `y=20` + grey `study_context` at `y=45`. Any header whose context text sits inside the title `<text>` element is a defect: fix it before output.
 5. **Reference and zero hallucinating.** Every fact, value, or status claim you render must be traceable to the JSON. Render only what the JSON contains; mark missing fields `N/A`; never invent or recompute derived values.
 6. **Consumer color rule.** For `consumer-block` only, assign colors per the consumer code — green = positive (what we want to see), orange = cautious (attention needed), red = negative (action needed), neutral = no expressed positivity/negativity. AI assigns these for CE only.
 7. **Output exactly one markdown code block.** Your entire response is the single `` ```xml `` … `` ``` `` block containing the full `<deck>` XML. No markdown fences other than that one wrapping block, no prose, no explanations outside it.
