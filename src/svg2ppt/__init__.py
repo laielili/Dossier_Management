@@ -18,12 +18,159 @@ pipeline; those bindings live in src/api.py when added later.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 from .layout import LayoutEngine
 from .render import DeckRenderer, RenderResult
 from .schema import Component, DeckXML, SchemaError, scale_svg_fonts
+
+
+# ---------------------------------------------------------------------------
+# study_region icon injection (build-stage post-process)
+# ---------------------------------------------------------------------------
+#
+# The downstream AI writes placeholders like `[cn]` or `[cn|fr]` at the end of
+# each efficacy-table / consumer-block title (see prompt SUMMARIZE section).
+# At build time we collect the placeholder positions and stamp the actual
+# 48x48 flag PNGs onto the rendered component image via PIL (NOT via SVG
+# <image> nodes). This bypasses PyMuPDF's well-known quirk of silently
+# dropping raster <image> references — we never ask PyMuPDF to rasterize
+# the flag, we paste it ourselves after PyMuPDF is done.
+#
+# Why this lives here and not in the prompt:
+#   - The prompt's SVG authoring rules forbid <image>/external URLs to keep
+#     the schema strict. Build-time injection bypasses that: LLM still writes
+#     only text, we add the raster stamps after parsing.
+#   - Flags are 48x48 RGBA (pre-resized under static/study_region/_48/).
+#   - All flag stamps happen *after* PyMuPDF rasterizes the SVG, so PyMuPDF
+#     never sees the flags.
+#
+# Replacement rules:
+#   - Match `\[[a-z]{2}(\|[a-z]{2})*\]` at the END of a study-header <text>.
+#   - Each alpha-2 code resolves to /static/study_region/_48/<code>.png.
+#   - Strip the placeholder from the <text> body (avoid double-render).
+#   - Record one entry per flag into comp.attrs["_region_icons"]:
+#     (code, viewbox_x, viewbox_y, viewbox_size). The renderer turns these
+#     into PIL paste calls in the same coordinate space.
+#   - Codes outside the whitelist: skipped silently (no image, placeholder
+#     stays as text -- the prompt already says null on unidentifiable, so
+#     unrecognised codes are also defensible as raw text).
+# ---------------------------------------------------------------------------
+
+_REGION_RE = re.compile(r"\[([a-z]{2})(?:\](?!\|)|(\|[a-z]{2})+)\]?")
+# Simpler / more accurate: `\[([a-z]{2}(\|[a-z]{2})*)\]` matches `[cn]` and
+# `[cn|fr]` greedily. We need the codes split out for icon resolution.
+_REGION_PLAIN_RE = re.compile(r"\[((?:[a-z]{2})(?:\|[a-z]{2})*)\]")
+
+# Asset directory resolved lazily so the module still imports even if the
+# _48/ bake hasn't been run yet.
+_BADGE_DIR_CACHED: Path | None = None
+
+
+def _badge_dir() -> Path:
+    """Resolve the 48x48 badge directory. Built by `_trash/verify/preprocess_icons.py`."""
+    global _BADGE_DIR_CACHED
+    if _BADGE_DIR_CACHED is None:
+        # /src/svg2ppt/__init__.py -> /repo/static/study_region/_48
+        _BADGE_DIR_CACHED = Path(__file__).resolve().parent.parent.parent / "static" / "study_region" / "_48"
+    return _BADGE_DIR_CACHED
+
+
+def _badge_path_for(code: str) -> str | None:
+    """Return the absolute file path of the 48x48 badge for `code`, or None
+    if the source asset does not exist in `static/study_region/_48/`.
+    """
+    badge = _badge_dir() / f"{code}.png"
+    if not badge.exists():
+        return None
+    return str(badge.resolve())
+
+
+# Icon size in SVG viewBox units. The deck's title row uses font-size 14, so
+# 48 is roughly 3.4x the text height — visibly prominent but still
+# header-tier. The renderer pastes the flag at this viewBox size, then maps
+# to canvas pixels via the placed component's actual on-page footprint.
+_ICON_SIZE = 48
+
+
+def _estimate_text_width(text: str, font_size: float) -> float:
+    """Rough Arial-metric width estimate in the same units as viewBox.
+
+    Bold + mixed ASCII averages ~0.65 em per char. Good enough for
+    icon x-offset (errors < a few px and don't compound because the next
+    component's <text> is on its own line).
+    """
+    # Strip inline tags the AI sometimes wraps tspan with.
+    visible = re.sub(r"<[^>]+>", "", text)
+    return len(visible) * font_size * 0.65
+
+
+def _collect_icons_into_svg(svg_text: str) -> tuple[str, list[tuple[str, float, float, float]]]:
+    """Scan a component's SVG, strip `[code]`/`[code|code]` from <text> bodies,
+    and return the rewritten SVG plus a list of flag stamps to apply at
+    PIL stage.
+
+    Each stamp is (code, viewbox_x, viewbox_y, viewbox_size). x/y are the
+    flag's top-left in SVG viewBox units; size is _ICON_SIZE (48) so all
+    flags render at a uniform 48-unit size regardless of component scale.
+    """
+    stamps: list[tuple[str, float, float, float]] = []
+
+    def _text_replace(match: re.Match[str]) -> str:
+        # Outer capture = the entire `<text ...>BODY</text>`.
+        full = match.group(0)
+        attrs_text = match.group(1)
+        body = match.group(2)
+        # Find codes; bail out silently if no placeholder here.
+        m_codes = _REGION_PLAIN_RE.search(body)
+        if not m_codes:
+            return full
+        codes = m_codes.group(1).split("|")
+        # Strip the placeholder (and one leading space) from the body.
+        new_body = _REGION_PLAIN_RE.sub("", body).rstrip()
+        # Re-emit the <text> with the cleaned body.
+        new_text = f"<text{attrs_text}>{new_body}</text>"
+        # Estimate x of the first icon.
+        attrs = dict(re.findall(r'([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*"([^"]*)"', attrs_text))
+        try:
+            text_x = float(attrs.get("x", "0") or 0)
+        except ValueError:
+            text_x = 0.0
+        try:
+            text_y = float(attrs.get("y", "0") or 0)
+        except ValueError:
+            text_y = 0.0
+        font_size = 14.0
+        try:
+            font_size = float(re.findall(r'font-size\s*=\s*"([^"]+)"', attrs_text)[0])
+        except (IndexError, ValueError):
+            pass
+        # x for the first icon: text_x + width of remaining (placeholder-stripped) text.
+        cursor_x = text_x + _estimate_text_width(new_body, font_size) + 4  # 4-unit gap
+        # y of the flag's TOP edge: align with the TOP of the title row
+        # (which in efficacy-table and consumer-block components always
+        # starts at viewBox y=0). The PIL renderer stamps a fixed-size PNG
+        # of FLAG_PX canvas pixels at this position. With FLAG_PX chosen to
+        # match the title-row height in design units, flag bottom aligns
+        # with row bottom at any component scale.
+        icon_y = 0
+        for code in codes:
+            if _badge_path_for(code) is None:
+                # Code outside whitelist / missing asset: skip silently.
+                continue
+            stamps.append((code, cursor_x, icon_y, float(_ICON_SIZE)))
+            cursor_x += _ICON_SIZE + 4
+        return new_text
+
+    new_svg = re.sub(
+        r"<text\b([^>]*)>([\s\S]*?)</text>",
+        _text_replace,
+        svg_text,
+        flags=re.IGNORECASE,
+    )
+    return new_svg, stamps
 
 
 class DeckBuilder:
@@ -122,6 +269,36 @@ class DeckBuilder:
             if scale != 1.0:
                 comp.svg = scale_svg_fonts(comp.svg, scale)
 
+    def _inject_study_region_icons(self, deck: DeckXML, out_dir: Path) -> None:
+        """Collect `[cn]` / `[cn|fr]` placeholder positions in each component
+        SVG and stash them onto `comp.attrs["_region_icons"]` for the
+        renderer to stamp as PNG via PIL.
+
+        The SVG itself is rewritten with placeholders stripped from <text>
+        bodies but NO <image> nodes added — PyMuPDF's SVG rasterizer silently
+        drops raster <image> references in our setup, so the only reliable
+        way to surface flags is to paste the PNGs onto the rendered component
+        image afterwards.
+
+        No-op if the badge source directory doesn't exist (e.g. before the
+        preprocess step has been run).
+        Per-component try/except keeps one malformed SVG from aborting
+        the whole build.
+        """
+        if not _badge_dir().exists():
+            return
+        for comp in deck.components:
+            try:
+                new_svg, stamps = _collect_icons_into_svg(comp.svg)
+                comp.svg = new_svg
+                # Stash stamps on the component. The renderer reads this attr
+                # in _paint_component / _render_component_png.
+                comp.attrs["_region_icons"] = stamps
+            except Exception:  # noqa: BLE001 — never let icon injection break the build
+                # If anything goes wrong for one component, leave it untouched.
+                comp.attrs.setdefault("_region_icons", [])
+                continue
+
     def build_from_string(
         self,
         xml_text: str,
@@ -130,6 +307,7 @@ class DeckBuilder:
     ) -> RenderResult:
         deck = DeckXML.from_string(xml_text)
         self._apply_content_scale(deck)
+        self._inject_study_region_icons(deck, Path(output_dir))
         pages = self.layout_engine.layout(deck.components)
         return self.renderer.render(
             pages, output_dir, filename=filename, editable=self.editable
@@ -143,6 +321,7 @@ class DeckBuilder:
     ) -> RenderResult:
         deck = DeckXML.from_file(xml_path)
         self._apply_content_scale(deck)
+        self._inject_study_region_icons(deck, Path(output_dir))
         pages = self.layout_engine.layout(deck.components)
         return self.renderer.render(
             pages, output_dir, filename=filename, editable=self.editable

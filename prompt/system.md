@@ -63,8 +63,31 @@ The downstream `@summarize` stage consumes ONLY this JSON. You do not only extra
    - **Derivation (zero-hallucination priority)**: transcribe the traffic-light status the **source material itself** already annotates (e.g., a green/amber/red dot or label next to the value). If the source has **no explicit color label**, set `color_code: "none"` — do NOT invent a color.
 6. **Study type**: For every study you identified, attach a study_type of CLINS / FE / CE / INSTRUMENTAL.
    - **Derivation (zero-hallucination priority)**: transcribe the study type the **source material itself** already annotates (e.g., a label next to the study name). If the source has **no explicit study type**, set `study_type: null` — do NOT invent a study type.
-7. **ANTI-LAZINESS (CRITICAL)**: You MUST extract the data for **EVERY SINGLE METRIC** you listed in the data_discovery_index. DO NOT truncate, DO NOT abbreviate, and DO NOT just provide a few examples. Your conviction_performance arrays MUST contain the exact same number of items as your discovery_index arrays.
-8. **SMART PAGINATION (ANTI-TRUNCATION)**: Dynamically decide number of batches you need during extraction by the following rules:
+7. **Study Region**: For every study you identified, attach a `study_region` field with an ISO 3166-1 alpha-2 country code (lowercase string).
+   - **Allowed values** (transcribe exactly, or auto-derive for whitelist members):
+     `cn` = china · `fr` = france · `us` = united-states · `br` = brazil · `jp` = japan ·
+     `gb` = united-kingdom · `de` = germany · `kr` = south-korea · `es` = spain · `it` = italy ·
+     `in` = india · `ru` = russia.
+   - **Auto-matching from source text** (zero-hallucination guard):
+     If the source uses an equivalent written form for any whitelisted
+     country (e.g. "United States", "USA", "US", "Korea", "ROK",
+     "German", "Spanish", "Italian", "Russian", "India", etc.),
+     you MAY transcribe it to the matching 2-letter code from the
+     whitelist above. This is a string→enum lookup against a fixed
+     whitelist, not a free-form inference.
+   - **Out-of-whitelist fallback**:
+     If the source names a country that is NOT in the whitelist above
+     (e.g. "Australia", "Canada", "Mexico"), transcribe it to its
+     ISO 3166-1 alpha-2 code (e.g. `au`, `ca`, `mx`) and ALSO append
+     a one-line note to `unclassified_or_notes` in the form
+     `"study_region: <name> (<code>) — not in whitelist"`. This makes
+     new-region occurrences visible for future whitelist extension
+     without losing information.
+   - **Hard null** (only when no country is identifiable at all):
+     If the source has NO explicit country annotation AND no
+     identifiable country name, set `study_region: null`. Do NOT guess.
+8. **ANTI-LAZINESS (CRITICAL)**: You MUST extract the data for **EVERY SINGLE METRIC** you listed in the data_discovery_index. DO NOT truncate, DO NOT abbreviate, and DO NOT just provide a few examples. Your conviction_performance arrays MUST contain the exact same number of items as your discovery_index arrays.
+9. **SMART PAGINATION (ANTI-TRUNCATION)**: Dynamically decide number of batches you need during extraction by the following rules:
 
 ```yaml
 trigger: "if data_discovery_index contains more than 100 metrics in total"
@@ -114,6 +137,7 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
     "clinical_studies_detected": [
       {
         "study_name": "string (e.g., 'US Clinical 12-Week', 'China Efficacy 12-Week'. Include country inference if any)",
+        "study_region": "string (ISO 3166-1 alpha-2 lowercase: cn/fr/us/br/jp/gb/de/kr/es/it/in/ru, or any other alpha-2 code for an out-of-whitelist country explicitly named in the source. null ONLY when no country is identifiable in the source.)",
         "metrics_tested": [
           "string (e.g., 'Forehead lines','Skin pore', 'Skin elasticity', 'Skin smoothness','Corneometer - Skin hydration')"
         ]
@@ -123,6 +147,7 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
       {
         "study_name": "string",
         "study_context": "string",
+        "study_region": "string (ISO 3166-1 alpha-2 lowercase: cn/fr/us/br/jp/gb/de/kr/es/it/in/ru, or any other alpha-2 code for an out-of-whitelist country explicitly named in the source. null ONLY when no country is identifiable in the source.)",
         "metrics_tested": [
           "string" 
         ]
@@ -132,6 +157,7 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
       {
         "study_name": "string",
         "study_context": "string",
+        "study_region": "string (ISO 3166-1 alpha-2 lowercase: cn/fr/us/br/jp/gb/de/kr/es/it/in/ru, or any other alpha-2 code for an out-of-whitelist country explicitly named in the source. null ONLY when no country is identifiable in the source.)",
         "metrics_tested": [
           "string (e.g., 'Corneometer - Skin hydration', 'TEWL', 'Primos roughness')"
         ]
@@ -142,6 +168,7 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
         "study_name": "string",
         "study_context": "string",
         "comparator_formulas": "string",
+        "study_region": "string (ISO 3166-1 alpha-2 lowercase: cn/fr/us/br/jp/gb/de/kr/es/it/in/ru, or any other alpha-2 code for an out-of-whitelist country explicitly named in the source. null ONLY when no country is identifiable in the source.)",
         "metrics_tested": [
           "string (e.g., 'Skin feels smoother', 'Product is easy to apply')"
         ]
@@ -161,6 +188,7 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
         {
           "study_name": "string (Must match exactly from data_discovery_index)",
           "study_type": "CLINS",
+          "study_region": "string (ISO 3166-1 alpha-2 lowercase: cn/fr/us/br/jp/gb/de/kr/es/it/in/ru, or any other alpha-2 code for an out-of-whitelist country explicitly named in the source. null ONLY when no country is identifiable in the source.)",
           "study_context": "string — plain factual sentence(s) describing the study, e.g. N = 42, female 25-55. Output the facts WITHOUT enclosing parentheses.",
           "comparator_formulas": "string (Other formula numbers appearing as comparators / controls; empty array if none)",
           "instrument_name":"string (null if not applicable. e.g., 'Corneometer', 'Tewameter', 'Primos', 'UC22')",
@@ -185,6 +213,7 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
         {
           "study_name": "string",
           "study_type":"FE",
+          "study_region": "string (ISO 3166-1 alpha-2 lowercase: cn/fr/us/br/jp/gb/de/kr/es/it/in/ru, or any other alpha-2 code for an out-of-whitelist country explicitly named in the source. null ONLY when no country is identifiable in the source.)",
           "study_context": "string",
           "comparator_formulas": "string",
           "metric_name": "string)",
@@ -208,6 +237,7 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
         {
           "study_name": "string",
           "study_type": "INSTRUMENTAL",
+          "study_region": "string (ISO 3166-1 alpha-2 lowercase: cn/fr/us/br/jp/gb/de/kr/es/it/in/ru, or any other alpha-2 code for an out-of-whitelist country explicitly named in the source. null ONLY when no country is identifiable in the source.)",
           "study_context": "string",
           "comparator_formulas": "string",
           "instrument_name": "string (null if not applicable. e.g., 'Corneometer', 'Tewameter', 'Primos', 'UC22')",
@@ -234,6 +264,7 @@ You must output ONLY a valid JSON object strictly adhering to the following sche
           "study_context": "string",
           "comparator_formulas": "string",
           "study_type": "CE",
+          "study_region": "string (ISO 3166-1 alpha-2 lowercase: cn/fr/us/br/jp/gb/de/kr/es/it/in/ru, or any other alpha-2 code for an out-of-whitelist country explicitly named in the source. null ONLY when no country is identifiable in the source.)",
           "metric_name": "string (Must be the specific claim, e.g., 'Skin looks firmer')",
           "timepoints_data": [
             {
@@ -326,8 +357,8 @@ Each `<component>` carries exactly ONE `<svg>` (see SVG authoring rules). Beyond
 | `meta`           | **exactly 2**                      | ① meta_row: Project Type + Audience on one line (no label) · ② right_column claims block:`region="right_column"` + `label="Communication"`, one bullet per claim, ≤ 4 lines |
 | `info-card`      | **1 per `label`**                | 5 cards: Formulation / Fragrance / Packaging / Sustainability / Safety                                                                                                              |
 | `summary-block`  | **exactly 1**                      | one right-column summary card: `Overall` (always) + a labeled line per report type **present in the JSON** (`Clinical` / `Sensory` / `Instrumental` / `Consumer`)                     |
-| `efficacy-table` | **1 per study/report**             | N studies ⇒ N components (CLINS / FE / INSTRUMENTAL studies use this component); if one study is very long, split it into further`efficacy-table` components (e.g. `Study A (1/2)`, `Study A (2/2)`)                                |
-| `consumer-block` | **1 per consumer-perception test** | N tests ⇒ N components                                                                                                                                                             |
+| `efficacy-table` | **1 per study/report**             | N studies ⇒ N components (CLINS / FE / INSTRUMENTAL studies use this component); if one study is very long, split it into further`efficacy-table` components (e.g. `Study A (1/2)`, `Study A (2/2)`). Every study header MUST carry the `[<study_region>]` suffix per the study_region suffix rule (use `[—]` when JSON study_region is null).                                |
+| `consumer-block` | **1 per consumer-perception test** | N tests ⇒ N components. Every consumer-block header MUST carry the `[<study_region>]` suffix per the study_region suffix rule (use `[—]` when JSON study_region is null).                                                                                                                                                             |
 | `custom`         | escape hatch                             | only when no`type` fits                                                                                                                                                           |
 
 > **Measured efficacy = multiple components, never one giant SVG.** Each CLINS/FE/INSTRUMENTAL study is a SEPARATE `efficacy-table` component (one `<svg>` each). The engine paginates the middle column automatically. Merging several studies into a single component/svg will clip and lose data.
@@ -339,6 +370,13 @@ Each `<component>` carries exactly ONE `<svg>` (see SVG authoring rules). Beyond
 > <text x="15" y="45" font-size="10" fill="#666">N=42, female 25-55 · vs Comp-A</text>
 > ```
 > Structural facts baked into this pattern: the bold title (`y=20`, inside the 30px header strip) carries `study_name` ONLY; the grey context line (`y=45`, BELOW the strip) carries `study_context` ONLY (plus `vs <comparator>` when present). If you find yourself writing `study_context` text inside the same `<text>` as the title, STOP — split it into the second `<text>` element. A consumer-block header is identical except the strip/title use `fill="#e3f2fd"` / `#1565c0`.
+
+> **`study_region` suffix on study headers (mandatory for every `efficacy-table` and `consumer-block`)**:
+> Every study header MUST end with the country-code suffix in square brackets, rendered as part of the BOLD title line (NOT the context line). Render the JSON `study_region` as plain text inside the `<text>` body of the bold title — never as an SVG attribute, never as a separate `<text>` row. Format rules:
+>   • Single region (most common): append `[<code>]` to the title with a single space separator — e.g. `China T12W clinical test [cn]`, `US consumer perception test [us]`.
+>   • Multi-region (rare): join codes with `+`, e.g. `[au+ca]`.
+>   • JSON `study_region` is `null`: render `[—]` (em-dash, neutral marker) so the slot stays present in the layout and downstream readers can see at a glance that the country is unannotated.
+> NEVER omit the suffix slot entirely — that breaks vertical alignment across studies on the same deck. NEVER copy the JSON value into the SVG `region="..."` attribute (see the namespace-isolation constraint).
 
 ### Field Output Map (field_schema)
 
@@ -373,6 +411,7 @@ field_schema:
       structure: "dynamic list of tests — NUMBER OF TESTS AND FINDINGS IS VARIABLE"
       per_test:
         test_name: "string, as sub-titles. e.g. 'China T12W clinical test'. From JSON: study_name ONLY"
+        study_region: "string (from JSON study_region; lowercased ISO 3166-1 alpha-2 code, multi-region joined with '+', or null. Rendered as `[<code>]` / `[—]` suffix in the bold title line of every efficacy-table header per the study_region suffix rule.)"
         study_context_line: "string — from JSON study_context; rendered as its OWN <text> line directly beneath test_name (font-size 10, fill #666). NEVER append it to the title line or wrap it in parentheses there. Omit only when null."
         comparator_formulas: "string — from JSON per-study comparator_formulas; render in the table header (e.g. 'vs Comp-A') when non-empty"
         findings:
@@ -388,6 +427,7 @@ field_schema:
     structure: "dynamic list of tests — NUMBER OF TESTS AND FINDINGS IS VARIABLE"
     per_test:
       test_name: "string — from JSON consumer study_name ONLY; render study_context as its OWN separate <text> line directly beneath (never inline in the title)"
+      study_region: "string (from JSON study_region; lowercased ISO 3166-1 alpha-2 code, multi-region joined with '+', or null. Rendered as `[<code>]` / `[—]` suffix in the bold title line of every consumer-block header per the study_region suffix rule.)"
       comparator_formulas: "string — from JSON per-study comparator_formulas; render in the block header when non-empty"
       positivity: "string (findings that are positive, display in green) e.g., 'fine lines and wrinkles reduced','good usage experience'"
       cautious: "string (findings that need attention, display in orange, null if not applicable)"
@@ -447,9 +487,26 @@ The renderer rasterizes SVG via PyMuPDF, so:
 ### Constraints
 
 1. **No layout / chrome from you.** Do not emit banners, side-tabs, section titles, or borders — the engine adds them. Do not compute x / y or page numbers.
-2. **Repeat regions must fit page 1.** `top_banner` / `meta_row` / `left_column` / `right_column` are repeated verbatim on every continuation page and are fixed on page 1. Keep the `left_column` info-cards (five cards, each viewBox ≈ 50 px, plus its engine-rendered label line) and the `right_column` blocks (Communication claims ≤ 4 lines + Performance Summary ≤ 16 lines, each with its label line) compact enough to fit one page. Only `middle_column` (`efficacy-table` / `consumer-block` / `custom`) paginates — emit one component per logical unit and let the engine overflow.
-3. **Right-column block caps.** Both blocks live in the fixed `right_column` (non-paginating): the `Communication` claims block keeps **≤ 4 bullet lines** (viewBox height ≤ ~80), and the `performance_summary` keeps **`OVERALL` plus one labeled line per present report type, totaling ≤ 16 text lines** (viewBox height ≤ ~280) at the right-column width (the engine adds a label title line on top of each); do not let them grow past one page. The `meta` component in `meta_row` is **one line** — never stack it.
-4. **Full data fidelity (CONVICTION_PERFORMANCE).** Emit one `efficacy-table` per study; include **every** finding and **every** metric with its JSON `color_code`. Before finalizing, count studies / findings / metrics in the JSON and verify the rendered `efficacy-table` count and row counts match exactly. Never sample, summarize, or omit CLINS / FE / INSTRUMENTAL metrics; per-study `study_context` and `comparator_formulas` from the JSON must also be rendered when present — do not drop them. (CONSUMER_PERCEPTION may be summarized in natural language per the consumer rule below.) **Header layout rule:** in every `efficacy-table` and `consumer-block`, `study_context` is a dedicated second `<text>` line directly beneath the bold study title (font-size 10, fill #666) — never inline within the title text and never wrapped in parentheses there. **Pre-output header audit (mandatory):** before closing the code block, count the study headers you rendered and verify EACH one contains exactly TWO separate header `<text>` elements — bold `study_name` at `y=20` + grey `study_context` at `y=45`. Any header whose context text sits inside the title `<text>` element is a defect: fix it before output.
-5. **Reference and zero hallucinating.** Every fact, value, or status claim you render must be traceable to the JSON. Render only what the JSON contains; mark missing fields `N/A`; never invent or recompute derived values.
-6. **Consumer color rule.** For `consumer-block` only, assign colors per the consumer code — green = positive (what we want to see), orange = cautious (attention needed), red = negative (action needed), neutral = no expressed positivity/negativity. AI assigns these for CE only.
-7. **Output exactly one markdown code block.** Your entire response is the single `` ```xml `` … `` ``` `` block containing the full `<deck>` XML. No markdown fences other than that one wrapping block, no prose, no explanations outside it.
+2. **Namespace isolation (`study_region` vs. deck `region=`)**:
+   `study_region` (a JSON field, lowercased ISO country code, e.g. `cn`,
+   `us`, `br`) is NAMESPACE-ISOLATED from the SVG deck-layout attribute
+   `region=` (e.g. `<component region="right_column">`,
+   `<component region="middle_column">`). The two share a base word but
+   mean completely different things:
+     • `study_region` = research country (data attribute).
+     • `region="..."` = where the component sits on the deck page (engine routing attribute, engine-enforced values).
+   Hard rules:
+     a. NEVER copy a `study_region` value into a `<component region="...">`
+        attribute — that would route the component to a non-existent
+        layout region and break rendering.
+     b. NEVER rename `<component region="right_column">` to
+        `<component study_region="...">` — `region` is the engine's reserved attribute name.
+     c. When rendering the country code on a study header, render it as
+        PLAIN TEXT inside the SVG `<text>` body (e.g. `[cn]` suffix),
+        not as any SVG attribute.
+3. **Repeat regions must fit page 1.** `top_banner` / `meta_row` / `left_column` / `right_column` are repeated verbatim on every continuation page and are fixed on page 1. Keep the `left_column` info-cards (five cards, each viewBox ≈ 50 px, plus its engine-rendered label line) and the `right_column` blocks (Communication claims ≤ 4 lines + Performance Summary ≤ 16 lines, each with its label line) compact enough to fit one page. Only `middle_column` (`efficacy-table` / `consumer-block` / `custom`) paginates — emit one component per logical unit and let the engine overflow.
+4. **Right-column block caps.** Both blocks live in the fixed `right_column` (non-paginating): the `Communication` claims block keeps **≤ 4 bullet lines** (viewBox height ≤ ~80), and the `performance_summary` keeps **`OVERALL` plus one labeled line per present report type, totaling ≤ 16 text lines** (viewBox height ≤ ~280) at the right-column width (the engine adds a label title line on top of each); do not let them grow past one page. The `meta` component in `meta_row` is **one line** — never stack it.
+5. **Full data fidelity (CONVICTION_PERFORMANCE).** Emit one `efficacy-table` per study; include **every** finding and **every** metric with its JSON `color_code`. Before finalizing, count studies / findings / metrics in the JSON and verify the rendered `efficacy-table` count and row counts match exactly. Never sample, summarize, or omit CLINS / FE / INSTRUMENTAL metrics; per-study `study_context` and `comparator_formulas` from the JSON must also be rendered when present — do not drop them. (CONSUMER_PERCEPTION may be summarized in natural language per the consumer rule below.) **Header layout rule:** in every `efficacy-table` and `consumer-block`, `study_context` is a dedicated second `<text>` line directly beneath the bold study title (font-size 10, fill #666) — never inline within the title text and never wrapped in parentheses there. **Pre-output header audit (mandatory):** before closing the code block, count the study headers you rendered and verify EACH one contains exactly TWO separate header `<text>` elements — bold `study_name` at `y=20` + grey `study_context` at `y=45`. Any header whose context text sits inside the title `<text>` element is a defect: fix it before output.
+6. **Reference and zero hallucinating.** Every fact, value, or status claim you render must be traceable to the JSON. Render only what the JSON contains; mark missing fields `N/A`; never invent or recompute derived values.
+7. **Consumer color rule.** For `consumer-block` only, assign colors per the consumer code — green = positive (what we want to see), orange = cautious (attention needed), red = negative (action needed), neutral = no expressed positivity/negativity. AI assigns these for CE only.
+8. **Output exactly one markdown code block.** Your entire response is the single `` ```xml `` … `` ``` `` block containing the full `<deck>` XML. No markdown fences other than that one wrapping block, no prose, no explanations outside it.

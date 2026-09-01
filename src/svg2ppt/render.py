@@ -34,6 +34,32 @@ from .schema import svg_natural_size, svg_view_box
 EMU_PER_UNIT = 9144  # 914400 EMU per inch / 100
 PT_PER_UNIT = 0.72  # 72 pt per inch / 100
 
+# Country-flag stamp size (rendered pixels on the canvas). All flags in a
+# deck share this fixed size so they look uniform regardless of how the
+# surrounding component scaled. The SVG viewBox-space size of 48 (recorded
+# in comp.attrs["_region_icons"]) is a placement aid (used only for cursor
+# advance); the on-canvas size is independent and never scaled with the
+# component.
+#
+# 30 px = the gray title-bar row height used by efficacy-table and
+# consumer-block headers in the sample XML, so the flag top and bottom
+# edges align with the title-row rect. Adjust this constant to retune the
+# visual weight of the flag without touching the collection code.
+FLAG_PX = 30
+
+
+def _resolve_badge_path(code: str) -> str | None:
+    """Absolute path to the 48x48 badge PNG for ``code``, or None if missing.
+
+    Duplicated from svg2ppt.__init__ to avoid a circular import (render is
+    imported by __init__). Keep both copies in sync.
+    """
+    here = Path(__file__).resolve().parent.parent.parent
+    badge = here / "static" / "study_region" / "_48" / f"{code}.png"
+    if not badge.exists():
+        return None
+    return str(badge.resolve())
+
 # A <text> whose transform is anything but a plain translate is skipped by the
 # editable-text overlay (its raster is still correct inside the component PNG).
 _TRANSFORM_UNSUPPORTED = re.compile(r"rotate|matrix|scale|skew", re.IGNORECASE)
@@ -169,6 +195,11 @@ class DeckRenderer:
         graphic sits exactly where the preview paints it; the label text itself
         comes from the overlay text box, never baked in here.
 
+        Country-flag stamps (``comp.attrs["_region_icons"]``) are pasted onto
+        the raster via PIL right after PyMuPDF is done — PyMuPDF's SVG raster
+        silently drops raster <image> references, so flags must arrive through
+        a different pipeline.
+
         The SVG raster is saved VERBATIM (un-premultiplied RGBA): PIL's
         ``paste`` into a transparent canvas would premultiply the RGB of
         semi-transparent pixels, which PowerPoint interprets differently and
@@ -186,9 +217,13 @@ class DeckRenderer:
             # Plain paste (no mask): copies straight alpha pixels verbatim.
             layer.paste(comp_img, (0, lh_px))
             canvas = Image.alpha_composite(canvas, layer)
+            # Flags go onto the full-canvas component PNG (origin = component-local).
+            self._stamp_region_icons(canvas, placed, origin_x_px=0, origin_y_px=0)
             canvas.save(str(png_path), "PNG")
         else:
             comp_img = comp_img.resize((w_px, h_px), Image.LANCZOS)
+            # Flags go onto the resized component PNG (origin = component-local).
+            self._stamp_region_icons(comp_img, placed, origin_x_px=0, origin_y_px=0)
             comp_img.save(str(png_path), "PNG")
 
     def _strip_text_elements(self, svg_text: str) -> str:
@@ -218,6 +253,8 @@ class DeckRenderer:
         comp_img = self._svg_to_image(placed.component.svg)
         comp_img = comp_img.resize((w, h), Image.LANCZOS)
         canvas.paste(comp_img, (x, y), comp_img)
+        # Stamp flag PNGs onto the page canvas (origin = page-absolute).
+        self._stamp_region_icons(canvas, placed, origin_x_px=x, origin_y_px=y)
 
     def _placed_rect_px(self, placed: Any) -> tuple[int, int, int, int]:
         x = int(round(placed.x * self.px_per_unit))
@@ -225,6 +262,64 @@ class DeckRenderer:
         w = int(round(placed.w * self.px_per_unit))
         h = int(round(placed.h * self.px_per_unit))
         return x, y, w, h
+
+    def _stamp_region_icons(
+        self,
+        canvas: Image.Image,
+        placed: Any,
+        origin_x_px: int,
+        origin_y_px: int,
+    ) -> None:
+        """Paste country-flag PNGs onto ``canvas`` for ``placed.component``.
+
+        Stamp positions are recorded by DeckBuilder._inject_study_region_icons
+        in *SVG viewBox units* (the original SVG width/height). The placed
+        component may be scaled (placed.w / svg_w != 1), so each stamp's
+        viewBox coordinates are mapped to the canvas via the placed rect's
+        scale ratio. The flag itself is rendered at its natural size — fixed
+        FLAG_PX on the canvas, NOT scaled with the component — so all flags
+        in a deck look the same regardless of how big their study table
+        ended up.
+
+        Vertical anchoring: ``vb_y`` was computed so that the flag's *top*
+        aligns with the source text's cap-height top — independent of
+        FLAG_PX. The collected ``vb_size`` is preserved but ignored here
+        (see FLAG_PX comment for why).
+
+        ``origin_x_px`` / ``origin_y_px`` are the canvas offsets of the
+        placed component's top-left. Use (0, 0) when stamping onto a
+        component-local PNG; use ``_placed_rect_px(placed)`` when stamping
+        onto the full-page canvas.
+        """
+        stamps = placed.component.attrs.get("_region_icons") or []
+        if not stamps:
+            return
+        svg_w, svg_h = svg_natural_size(placed.component.svg)
+        if svg_w <= 0 or svg_h <= 0:
+            return
+        # X/Y scales (viewBox -> placed rect). X and Y can diverge if the SVG
+        # was authored with non-uniform aspect (rare; treat uniformly).
+        scale_x = placed.w / svg_w if placed.w > 0 else 1.0
+        scale_y = placed.h / svg_h if placed.h > 0 else 1.0
+
+        for code, vb_x, vb_y, _vb_size in stamps:
+            src = _resolve_badge_path(code)
+            if src is None:
+                continue
+            # Map viewBox position to canvas pixels. The flag is FLAG_PX on
+            # the canvas (no scale), positioned where the original SVG
+            # <image> would have been had we put one there.
+            cx_px = int(round(origin_x_px + vb_x * scale_x * self.px_per_unit))
+            cy_px = int(round(origin_y_px + vb_y * scale_y * self.px_per_unit))
+            try:
+                flag = Image.open(src).convert("RGBA")
+            except Exception:
+                continue
+            # Flag is fixed FLAG_PX regardless of scale; resize if the asset
+            # happens to be a different baked size.
+            if flag.size != (FLAG_PX, FLAG_PX):
+                flag = flag.resize((FLAG_PX, FLAG_PX), Image.LANCZOS)
+            canvas.paste(flag, (cx_px, cy_px), flag)
 
     def _svg_to_image(self, svg_text: str) -> Image.Image:
         """Render an SVG string to a Pillow RGBA image via PyMuPDF."""
