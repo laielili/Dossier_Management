@@ -151,17 +151,21 @@ def run_project_pipeline(
     project_name: str,
     stage_cb=None,
     folder: Optional[Path] = None,
+    file_paths: Optional[list[Path]] = None,
     condense_dir: Optional[Path] = None,
 ) -> dict:
-    """Run the full chain for ONE project folder. Returns a result dict.
+    """Run the full chain for ONE project folder or one explicit file list.
 
     stage_cb(stage_name) is called as each stage begins (for the frontend
     stage tracker). Caller must hold / respect the processing lock.
 
-    ``folder`` overrides the resolved project folder (defaults to
-    ``project_data_dir(project_name)``). The retrieval flow passes the
-    ``retrieved/<name>/`` cache folder here so the pipeline runs on the
-    copied files rather than the live source tree.
+    Either ``folder`` OR ``file_paths`` is used:
+      - ``folder``: per-project dossier folder (defaults to
+        ``project_data_dir(project_name)``). Used by the legacy / CLI flow.
+      - ``file_paths``: explicit list of absolute PDF paths. Used by the
+        retrieval flow, which no longer copies sources into a cache folder.
+        When supplied, files are read in place; classifier results are not
+        applied as file moves (there is no folder to move INTO).
 
     ``condense_dir`` overrides where denoised per-document PDFs are written
     (defaults to ``<PROJECT_ROOT>/Dossier_condensed/<project_name>/``). The
@@ -172,9 +176,14 @@ def run_project_pipeline(
         if stage_cb:
             stage_cb(name)
 
+    if file_paths is not None:
+        return _run_project_pipeline_paths(
+            project_name, stage_cb, file_paths, condense_dir,
+        )
+
     folder = Path(folder) if folder is not None else project_data_dir(project_name)
     if not folder.exists():
-        raise FileNotFoundError(f"Project folder not found: {project_name}")
+        raise FileNotFoundError("Project folder not found: " + project_name)
 
     # -- 1) scan ------------------------------------------------------------
     stage("scan")
@@ -199,8 +208,8 @@ def run_project_pipeline(
     unknown = [r["filename"] for r in results if r["report_type"] not in REPORT_TYPES]
     add_event(
         f"[{project_name}] classify: {len(results)} file(s) "
-        f"({len(moved)} assigned to CLINS/FE/CE, {len(unknown)} UNKNOWN "
-        f"— still processed)",
+        f"({len(moved)} assigned dossier type, {len(unknown)} UNKNOWN "
+        f"-- still processed)",
         "info",
     )
     for u in unprocessed:
@@ -210,10 +219,7 @@ def run_project_pipeline(
     stage("ingest")
     pipeline = DossierPipeline(project_name)
     pipeline.init()
-    # ingest reads classified PDFs from the SAME folder scan/classify used
-    # (retrieved/<name>/ for the retrieval flow, not project_data_dir which is a
-    # different path). Without base_dir, ingest looks in the wrong place and
-    # indexes 0 pages.
+    # ingest reads classified PDFs from the SAME folder scan/classify used.
     n_pages = pipeline.ingest(base_dir=folder)
     add_event(f"[{project_name}] ingest: {n_pages} page(s) indexed")
     if n_pages == 0:
@@ -221,7 +227,7 @@ def run_project_pipeline(
         # text pages can be indexed (and OCR is disabled). Classification still
         # ran; the pipeline proceeds and the file is passed through unchanged.
         add_event(
-            f"[{project_name}] 0 text pages indexed — source PDF(s) appear to "
+            f"[{project_name}] 0 text pages indexed -- source PDF(s) appear to "
             f"have no extractable text layer (scanned / image-only). "
             f"Classification still completed; the file(s) will be passed "
             f"through to the deliverable unchanged (no text-based noise "
@@ -253,6 +259,85 @@ def run_project_pipeline(
     }
 
 
+def _run_project_pipeline_paths(
+    project_name: str,
+    stage_cb,
+    file_paths: list[Path],
+    condense_dir: Optional[Path],
+) -> dict:
+    """Run the full chain on an explicit list of source paths.
+
+    No source copies, no folder globbing, no file moves: the user-selected
+    absolute paths are read in place. Classifier results are reported back
+    but not applied as archive moves (there is no per-project folder to
+    move INTO under the retrieval flow).
+    """
+    def stage(name: str):
+        if stage_cb:
+            stage_cb(name)
+
+    # -- 1) scan ------------------------------------------------------------
+    stage("scan")
+    valid = [p for p in file_paths if p.exists() and p.is_file()]
+    add_event(f"[{project_name}] scan: {len(valid)} selected file(s)")
+
+    # -- 2) classify (no auto-archive; report only) --------------------------
+    stage("classify")
+    classifier = Classifier()
+    out = classifier.classify_paths(valid)
+    results = out["results"]
+    unprocessed = out.get("unprocessed", [])
+    unknown = [r["filename"] for r in results if r["report_type"] not in REPORT_TYPES]
+    add_event(
+        f"[{project_name}] classify: {len(results)} file(s) "
+        f"({len(results) - len(unknown)} assigned dossier type, "
+        f"{len(unknown)} UNKNOWN -- still processed)",
+        "info",
+    )
+    for u in unprocessed:
+        add_event(f"[{project_name}] skipped: {u['filename']} ({u['reason']})", "warn")
+
+    # -- 3) ingest (in place) ----------------------------------------------
+    stage("ingest")
+    pipeline = DossierPipeline(project_name)
+    pipeline.init()
+    n_pages = pipeline.ingest_paths(valid)
+    add_event(f"[{project_name}] ingest: {n_pages} page(s) indexed")
+    if n_pages == 0:
+        add_event(
+            f"[{project_name}] 0 text pages indexed -- source PDF(s) appear "
+            f"to have no extractable text layer (scanned / image-only). "
+            f"Classification still completed; the file(s) will be passed "
+            f"through to the deliverable unchanged (no text-based noise "
+            f"removal is possible without OCR).",
+            "warn",
+        )
+
+    # -- 4) condense (in place, write to deliverable) ----------------------
+    stage("condense")
+    if condense_dir is not None:
+        project_out = Path(condense_dir)
+    else:
+        project_out = PROJECT_ROOT / CONDENSED_DIR_NAME / project_name
+    result = pipeline.condense_paths(output_dir=project_out, file_paths=valid)
+    add_event(
+        f"[{project_name}] condense: {result['sources_processed']} source(s), "
+        f"{result['pages_dropped']} noise page(s) dropped -> "
+        f"{project_out}/",
+        "success",
+    )
+
+    return {
+        "project": project_name,
+        "files_classified": len(results),
+        "unknown": unknown,
+        "pages_ingested": n_pages,
+        "output_dir": str(project_out),
+        "files_written": result["files_written"],
+    }
+
+
+
 # ---------------------------------------------------------------------------
 # Retrieval flow — search -> select -> copy into retrieved/<name>/ -> pipeline
 # ---------------------------------------------------------------------------
@@ -278,38 +363,17 @@ def _set_retrieve(**kw) -> None:
         _retrieve_job.update(kw)
 
 
-def _copy_selected(files: list[str], dest_dir: Path) -> list[str]:
-    """Copy the user-selected source files into ``dest_dir``.
 
-    Collision-safe: if two selected files share a base name (e.g. they came
-    from different subfolders of the search target), the later one is suffixed
-    ``name_2.ext`` so nothing is overwritten. Returns the list of copied paths.
-    """
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    copied: list[str] = []
-    for src in files:
-        s = Path(src)
-        if not s.exists() or not s.is_file():
-            add_event(f"retrieve: skipped missing file {s.name}", "warn")
-            continue
-        dest = dest_dir / s.name
-        if dest.exists():
-            stem = s.stem
-            i = 1
-            while (dest_dir / f"{stem}_{i}{s.suffix}").exists():
-                i += 1
-            dest = dest_dir / f"{stem}_{i}{s.suffix}"
-        try:
-            shutil.copy2(s, dest)
-            copied.append(str(dest))
-        except OSError as e:
-            add_event(f"retrieve: could not copy {s.name}: {e}", "error")
-    return copied
 
 
 def retrieve_start(project_name: str, files: list[str]) -> dict:
-    """Begin a retrieval: copy selected files into retrieved/<name>/ and run
-    the pipeline on that folder in a background thread.
+    """Begin a retrieval: run the pipeline on the user-selected source files in
+    a background thread.
+
+    No source files are copied. The pipeline reads from the absolute paths the
+    user submitted and writes the processed deliverable to
+    ``retrieved/<name>/AI_feed/<name>/{CLINS,FE,CE}/`` — there is no longer a
+    raw-source cache folder.
 
     Returns {"ok": True, "started": True, "project_name": <final name>}.
     On invalid input returns {"ok": False, "detail": ...} (no thread started).
@@ -321,15 +385,16 @@ def retrieve_start(project_name: str, files: list[str]) -> dict:
         return {"ok": False, "detail": "no files selected"}
 
     # Resolve a free retrieved/<name>/ — suffix on collision so a re-run with
-    # the same name never clobbers a previous retrieval's cache.
-    folder = RETRIEVED_DIR / name
-    if folder.exists() and any(folder.iterdir()):
+    # the same name never clobbers a previous retrieval's deliverable. (We keep
+    # the deliverable under retrieved/<name>/AI_feed/<name>/ but also need a
+    # distinct parent so two retrievals with the same name don't merge.)
+    parent = RETRIEVED_DIR / name
+    if parent.exists() and any(parent.iterdir()):
         i = 1
         while (RETRIEVED_DIR / f"{name}_{i}").exists() and \
                 any((RETRIEVED_DIR / f"{name}_{i}").iterdir()):
             i += 1
         name = f"{name}_{i}"
-        folder = RETRIEVED_DIR / name
 
     with _retrieve_lock:
         if _retrieve_job["running"]:
@@ -350,23 +415,29 @@ def retrieve_start(project_name: str, files: list[str]) -> dict:
 
 
 def _retrieve_worker(project_name: str, files: list[str]) -> None:
-    """Copy selected files, then run scan->classify->ingest->condense on the
-    retrieved cache folder. Runs under the global processing lock so it never
-    overlaps another pipeline pass."""
-    folder = RETRIEVED_DIR / project_name
-    try:
-        copied = _copy_selected(files, folder)
-        add_event(
-            f"[{project_name}] copied {len(copied)} file(s) into "
-            f"retrieved/{project_name}/",
-            "info",
-        )
-    except Exception as e:
-        logger.exception(f"Retrieve copy failed for '{project_name}'")
-        add_event(f"[{project_name}] copy FAILED: {e}", "error")
+    """Run scan->classify->ingest->condense on the user-selected source files
+    in place (no copies). Runs under the global processing lock so it never
+    overlaps another pipeline pass.
+    """
+    # Validate the selected paths up front so we can fail fast before grabbing
+    # the processing lock.
+    src_paths: list[Path] = []
+    for f in files:
+        p = Path(f)
+        if not p.exists() or not p.is_file():
+            add_event(f"retrieve: skipped missing file {p.name}", "warn")
+            continue
+        src_paths.append(p)
+    if not src_paths:
         _set_retrieve(running=False, finished=True,
-                      error=str(e), current_stage=None)
+                      error="no valid selected files", current_stage=None)
         return
+
+    add_event(
+        f"[{project_name}] preprocessing {len(src_paths)} file(s) in place "
+        f"(no source copies)",
+        "info",
+    )
 
     with _processing_lock:
         try:
@@ -380,7 +451,7 @@ def _retrieve_worker(project_name: str, files: list[str]) -> None:
             res = run_project_pipeline(
                 project_name,
                 stage_cb=lambda s: _set_retrieve(current_stage=s),
-                folder=folder,
+                file_paths=src_paths,
                 condense_dir=drag_dir,
             )
             add_event(

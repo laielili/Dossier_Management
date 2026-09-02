@@ -19,6 +19,45 @@ from .pdf_parser import PDFParser
 logger = get_logger("page_index")
 
 
+def collect_pdf_paths_from(file_paths: list[Path]) -> list[Path]:
+    """Resolve an explicit list of absolute PDF paths for indexing.
+
+    Office sources (pptx/docx) are converted next to themselves via
+    ``convert_folder(parent)`` so the PDF siblings exist; the returned list
+    contains only existing PDFs (the original pptx/docx paths are replaced by
+    their PDF siblings when present).
+
+    Used by the retrieval flow, which reads from absolute user-selected paths
+    rather than a per-project folder.
+    """
+    seen_parents: set[Path] = set()
+    for p in file_paths:
+        parent = p.parent
+        if parent in seen_parents:
+            continue
+        seen_parents.add(parent)
+        try:
+            convert_folder(parent)
+        except ConverterUnavailable as e:
+            logger.warning(
+                f"Office conversion unavailable ({e}); non-PDF sources in "
+                f"{parent} cannot be normalized."
+            )
+
+    out: list[Path] = []
+    for raw in file_paths:
+        p = Path(raw)
+        if p.suffix.lower() == ".pdf":
+            if p.exists():
+                out.append(p)
+            continue
+        sibling_pdf = p.with_suffix(".pdf")
+        if sibling_pdf.exists():
+            out.append(sibling_pdf)
+    # Stable order — keep the user's selection order, do NOT resort by name.
+    return out
+
+
 def collect_pdf_paths(base_dir: Path | None = None) -> list[Path]:
     """Walk <base_dir>/{CLINS,FE,CE}/, normalize pptx/docx -> PDF, collect PDFs.
 
@@ -59,6 +98,44 @@ def collect_pdf_paths(base_dir: Path | None = None) -> list[Path]:
 
 def _index_path(project_id: str) -> Path:
     return INDEX_DIR / f"{project_id}.json"
+
+
+def build_index_from_paths(project_id: str, file_paths: list[Path]) -> int:
+    """Parse an explicit list of PDFs and save the project index.
+
+    Same shape as ``build_index`` but reads from absolute paths supplied by the
+    caller instead of globbing a project folder. Used by the retrieval flow.
+    """
+    pdf_paths = collect_pdf_paths_from(file_paths)
+    if not pdf_paths:
+        logger.warning("No PDF files found in the supplied path list.")
+        save_index(project_id, [])
+        return 0
+
+    pages: list[dict] = []
+    for pdf_path in pdf_paths:
+        logger.info(f"Indexing: {pdf_path}")
+        try:
+            with PDFParser(pdf_path) as parser:
+                for p in parser.extract_all_pages():
+                    pages.append({
+                        "report_type": p["report_type"],
+                        "filename": p["filename"],
+                        "page_index": p["page_index"],
+                        "page_label": p["page_label"],
+                        "source_path": p["source_path"],
+                        "text": p["text"],
+                        "signals": p["signals"],
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to index {pdf_path}: {e}")
+
+    save_index(project_id, pages)
+    logger.info(
+        f"Index built: {len(pages)} pages from {len(pdf_paths)} PDFs "
+        f"for project '{project_id}'"
+    )
+    return len(pages)
 
 
 def build_index(project_id: str, base_dir: Path | None = None) -> int:

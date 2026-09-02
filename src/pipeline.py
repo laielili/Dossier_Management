@@ -26,9 +26,11 @@ from .config import (
 from .logger import get_logger
 from .page_index import (
     build_index,
+    build_index_from_paths,
     index_count,
     delete_index,
     collect_pdf_paths,
+    collect_pdf_paths_from,
 )
 from .pdf_parser import infer_report_type
 from .retriever import build_retriever, Retriever
@@ -131,6 +133,15 @@ class DossierPipeline:
             logger.warning(
                 f"No PDF files found in {base_dir}/{{CLINS,FE,CE}}/."
             )
+        return total_pages
+
+    def ingest_paths(self, file_paths):
+        # Build the index from an explicit list of absolute paths (retrieval flow).
+        self.init()
+        paths = [Path(p) for p in file_paths]
+        total_pages = build_index_from_paths(self.project_id, paths)
+        if total_pages == 0:
+            logger.warning("No PDF files found in the supplied path list.")
         return total_pages
 
     # ------------------------------------------------------------------
@@ -271,6 +282,76 @@ class DossierPipeline:
             "sources_processed": sources_processed,
         }
 
+    def condense_paths(self, output_dir, file_paths):
+        # Denoise an explicit list of source files in place (retrieval flow).
+        self.init()
+        if self.retriever.count() == 0:
+            logger.warning(
+                "condense_paths: 0 text pages indexed -- source has no "
+                "extractable text layer (scanned/image-only PDF, no OCR). "
+                "Passing files through unchanged."
+            )
+            return self._pass_through_paths(output_dir, file_paths)
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        survivors = self.retriever.discover(top_n=None)
+
+        kept = {}
+        for item in survivors:
+            meta = item.get("metadata", {})
+            sp = meta.get("source_path", "")
+            if not sp:
+                continue
+            rt = meta.get("report_type", "")
+            entry = kept.setdefault(sp, {"indices": set(), "report_type": rt})
+            entry["indices"].add(meta.get("page_index", 0))
+
+        files_written = []
+        pages_dropped = 0
+        sources_processed = 0
+
+        for sp, info in kept.items():
+            src_path = Path(sp)
+            if not src_path.exists():
+                logger.warning("condense_paths: source missing, skipped: " + sp)
+                continue
+            rt = info["report_type"] or "UNKNOWN"
+            dest_dir = output_dir / rt
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / src_path.name
+            try:
+                doc = fitz.open(str(src_path))
+            except Exception as e:
+                logger.warning("condense_paths: cannot open " + sp + ": " + str(e))
+                continue
+            try:
+                total = doc.page_count
+                indices = sorted(info["indices"])
+                if not indices:
+                    indices = list(range(min(DELETE_MIN_KEEP, total)))
+                doc.select(indices)
+                pages_dropped += (total - doc.page_count)
+                doc.save(
+                    str(dest),
+                    garbage=3, clean=1,
+                    deflate=1, deflate_images=1, deflate_fonts=1,
+                    use_objstms=1,
+                )
+                files_written.append(rt + "/" + src_path.name)
+                sources_processed += 1
+            except Exception as e:
+                logger.warning("condense_paths: failed writing " + str(dest) + ": " + str(e))
+            finally:
+                doc.close()
+        return {
+            "output_dir": str(output_dir),
+            "files_written": files_written,
+            "pages_dropped": pages_dropped,
+            "sources_processed": sources_processed,
+        }
+
     # ------------------------------------------------------------------
     # Pass-through (no text layer -> no lexical denoise possible)
     # ------------------------------------------------------------------
@@ -314,6 +395,32 @@ class DossierPipeline:
             f"Pass-through complete: {len(files_written)} source(s) copied "
             f"unchanged to {output_dir}"
         )
+        return {
+            "output_dir": str(output_dir),
+            "files_written": files_written,
+            "pages_dropped": 0,
+            "sources_processed": len(files_written),
+        }
+
+    def _pass_through_paths(self, output_dir, file_paths):
+        # Copy an explicit list of files into the deliverable unchanged.
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        files_written = []
+        for raw in file_paths:
+            p = Path(raw)
+            if not p.exists() or not p.is_file():
+                logger.warning("_pass_through_paths: skipped missing " + str(p))
+                continue
+            rt = infer_report_type(p)
+            dest_dir = output_dir / rt
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / p.name
+            try:
+                shutil.copy2(p, dest)
+                files_written.append(rt + "/" + p.name)
+            except OSError as e:
+                logger.warning("_pass_through_paths: cannot copy " + p.name + ": " + str(e))
         return {
             "output_dir": str(output_dir),
             "files_written": files_written,

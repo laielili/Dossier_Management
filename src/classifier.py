@@ -138,10 +138,91 @@ class Classifier:
         }
 
     # ------------------------------------------------------------------
+    # Explicit path list (retrieval flow - no source copies, no archiving)
+    # ------------------------------------------------------------------
+
+    def classify_paths(self, paths):
+        # Classify an explicit list of PDF files without touching the
+        # filesystem layout (no moves, no auto-archive).
+        results = []
+        unprocessed = []
+
+        # Normalize any pptx/docx in each parent folder so PDF siblings exist.
+        seen_parents = set()
+        for p in paths:
+            parent = p.parent
+            if parent in seen_parents:
+                continue
+            seen_parents.add(parent)
+            try:
+                convert_folder(parent)
+            except ConverterUnavailable as e:
+                logger.warning(
+                    "Office conversion unavailable (" + str(e) + "); non-PDF sources "
+                    "in " + str(parent) + " cannot be normalized."
+                )
+
+        for raw in paths:
+            p = Path(raw)
+            # Reject anything not on disk first.
+            if not p.exists() or not p.is_file():
+                if p.suffix.lower() in CONVERTIBLE_EXTS:
+                    unprocessed.append({
+                        "filename": p.name,
+                        "reason": "failed Office conversion (pptx/docx -> PDF)",
+                    })
+                elif _is_junk_filename(p.name):
+                    unprocessed.append({
+                        "filename": p.name,
+                        "reason": "Office lock / OS cruft file",
+                    })
+                else:
+                    unprocessed.append({
+                        "filename": p.name,
+                        "reason": "missing file (no longer on disk)",
+                    })
+                continue
+
+            pdf = p.with_suffix(".pdf") if p.suffix.lower() != ".pdf" else p
+            if pdf != p and not pdf.exists():
+                if p.suffix.lower() in CONVERTIBLE_EXTS:
+                    unprocessed.append({
+                        "filename": p.name,
+                        "reason": "failed Office conversion (pptx/docx -> PDF)",
+                    })
+                elif _is_junk_filename(p.name):
+                    unprocessed.append({
+                        "filename": p.name,
+                        "reason": "Office lock / OS cruft file",
+                    })
+                else:
+                    unprocessed.append({
+                        "filename": p.name,
+                        "reason": "unsupported file type (not PDF/pptx/docx)",
+                    })
+                continue
+
+            score_target = pdf if pdf != p and pdf.exists() else p
+            text = extract_first_page_text(score_target)
+            res = self.classify_text(text)
+            res["filename"] = score_target.name
+            res["path"] = str(score_target)
+            res["archived"] = False
+            res["current_path"] = str(score_target)
+            results.append(res)
+            logger.info(
+                score_target.name + ": type=" + res["report_type"] + " "
+                "conf=" + str(res["confidence"]) + " low=" + str(res["low_confidence"])
+            )
+
+        return {"results": results, "unprocessed": unprocessed}
+
+    # ------------------------------------------------------------------
     # Inbox scan + auto-archive
     # ------------------------------------------------------------------
 
     def classify_inbox(
+
         self,
         inbox_dir: Path | None = None,
         auto_archive: bool = True,
