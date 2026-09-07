@@ -164,12 +164,25 @@ class Classifier:
 
         for raw in paths:
             p = Path(raw)
+
+            # A pptx/docx that converted SUCCESSFULLY is consumed (deleted) by
+            # converter._remove_consumed_source, so by the time we look at it
+            # the original path no longer exists. Its sibling PDF is the real
+            # document — mirrors the guard in classify_inbox: only a
+            # convertible with NO sibling PDF is an actual conversion failure.
+            if (
+                not p.exists()
+                and p.suffix.lower() in CONVERTIBLE_EXTS
+                and p.with_suffix(".pdf").exists()
+            ):
+                p = p.with_suffix(".pdf")
+
             # Reject anything not on disk first.
             if not p.exists() or not p.is_file():
                 if p.suffix.lower() in CONVERTIBLE_EXTS:
                     unprocessed.append({
                         "filename": p.name,
-                        "reason": "failed Office conversion (pptx/docx -> PDF)",
+                        "reason": "failed Office conversion (no PDF produced)",
                     })
                 elif _is_junk_filename(p.name):
                     unprocessed.append({

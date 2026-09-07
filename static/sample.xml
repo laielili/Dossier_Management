@@ -4,19 +4,16 @@
       <text x="0" y="18" font-size="18" font-weight="bold" fill="#333">[PROJECT_NAME]</text>
     </svg>
   </component>
-
   <component type="formula-ref">
     <svg viewBox="0 0 1000 14" width="1000" height="14">
       <text x="0" y="11" font-size="11" fill="#c8860d">[FORMULA_REF]</text>
     </svg>
   </component>
-
   <component type="description">
     <svg viewBox="0 0 440 20" width="440" height="20">
       <text x="12" y="14" font-size="8" fill="#333">[PRODUCT_DESCRIPTION]</text>
     </svg>
   </component>
-
   <component type="meta">
     <svg viewBox="0 0 1000 16" width="1000" height="16">
       <text x="0" y="12" font-size="8" fill="#333">
@@ -25,7 +22,6 @@
       </text>
     </svg>
   </component>
-
   <component type="meta" region="right_column" label="Communication">
     <svg viewBox="0 0 380 60" width="380" height="60">
       <text x="12" y="16" font-size="12" fill="#333">• [CLAIM_1]</text>
@@ -63,7 +59,6 @@
       <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">[STUDY_TITLE_1] [cn]</text>
       <text x="15" y="45" font-size="10" fill="#666">[STUDY_DESCRIPTION_1]</text>
-
       <line x1="0" y1="60" x2="900" y2="60" stroke="#ddd" stroke-width="1" />
       <text x="15" y="80" font-size="12" fill="#333">[MEASURE_1]</text>
       <text x="500" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T4W: [XX.XX%]</text>
@@ -83,7 +78,6 @@
       <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">[STUDY_TITLE_2] [us]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_2]</text>
-
       <line x1="0" y1="60" x2="900" y2="60" stroke="#ddd" stroke-width="1" />
       <text x="15" y="80" font-size="12" fill="#333">[MEASURE_4]</text>
       <text x="500" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T1w: [XX.XX%]</text>
@@ -99,7 +93,6 @@
       <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">[STUDY_TITLE_3] [br]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_3]</text>
-
       <line x1="0" y1="60" x2="900" y2="60" stroke="#ddd" stroke-width="1" />
       <text x="15" y="80" font-size="12" fill="#333">[MEASURE_6]</text>
       <text x="500" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T1wk: [XX.X%]</text>
@@ -110,8 +103,7 @@
     <svg viewBox="0 0 900 90" width="900" height="90">
       <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">[STUDY_TITLE_4] [fr]</text>
-      <text x="15" y="45" font-size="10" fill="#666">[N=XX]</text>
-
+      <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_4]</text>
       <line x1="0" y1="60" x2="900" y2="60" stroke="#ddd" stroke-width="1" />
       <text x="15" y="80" font-size="12" fill="#333">[MEASURE_7]</text>
       <text x="500" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T4W: [XX.XX%]</text>
@@ -123,7 +115,6 @@
       <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">[STUDY_TITLE_5] [jp]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_5]</text>
-
       <line x1="0" y1="60" x2="900" y2="60" stroke="#ddd" stroke-width="1" />
       <text x="15" y="80" font-size="12" fill="#333">[MEASURE_8]</text>
       <text x="500" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T1h: +[XXX.XX%]</text>
@@ -135,13 +126,10 @@
       <rect x="0" y="0" width="900" height="30" fill="#e3f2fd" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#1565c0">[CONSUMER_STUDY_TITLE_1] [gb]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_6]</text>
-
       <text x="15" y="70" font-size="12" fill="#333">• [PERCEPTION_1]</text>
       <text x="600" y="70" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.X%]</text>
-
       <text x="15" y="95" font-size="12" fill="#333">• [PERCEPTION_2]</text>
       <text x="600" y="95" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.X%]</text>
-
       <text x="15" y="120" font-size="12" fill="#333">• [PERCEPTION_3]</text>
       <text x="600" y="120" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.X%]</text>
     </svg>
@@ -151,13 +139,10 @@
       <rect x="0" y="0" width="900" height="30" fill="#e3f2fd" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#1565c0">[CONSUMER_STUDY_TITLE_2] [in]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_7]</text>
-
       <text x="15" y="70" font-size="12" fill="#333">• [PERCEPTION_4]</text>
       <text x="600" y="70" font-size="12" font-weight="bold" fill="#333333">[TIMEPOINT_1]: [XX.X%]</text>
-
       <text x="15" y="95" font-size="12" fill="#333">• [PERCEPTION_5]</text>
       <text x="600" y="95" font-size="12" font-weight="bold" fill="#2e7d32">[TIMEPOINT_2]: [XX.X%]</text>
-
       <text x="15" y="120" font-size="12" fill="#333">• [PERCEPTION_6]</text>
       <text x="600" y="120" font-size="12" font-weight="bold" fill="#333333">[TIMEPOINT_1]: [XX.X%]</text>
     </svg>
@@ -169,7 +154,97 @@
       <text x="12" y="56" font-size="11" fill="#333">[OVERALL_SENTENCE_3]</text>
       <text x="12" y="82" font-size="11" fill="#333"><tspan font-weight="bold">CLINICAL:</tspan> [CLINS_SENTENCE_WITH_KEY_METRIC] <tspan font-weight="bold" fill="#2e7d32">[-XX.XX% AT T12W]</tspan>.</text>
       <text x="12" y="108" font-size="11" fill="#333"><tspan font-weight="bold">SENSORY:</tspan> [FE_SENTENCE_WITH_KEY_METRIC] <tspan font-weight="bold" fill="#2e7d32">[+XXX.XX% AT T1H]</tspan>.</text>
-      <text x="12" y="134" font-size="11" fill="#333"><tspan font-weight="bold">CONSUMER:</tspan> <tspan font-weight="bold" fill="#2e7d32">[XX.X% ACCEPTANCE]</tspan> [CE_SENTENCE]; <tspan font-weight="bold" fill="#e07b00">[XX.X% NEEDS ATTENTION]</tspan>.</text>
+      <text x="12" y="134" font-size="11" fill="#333"><tspan font-weight="bold">CONSUMER:</tspan> <tspan font-weight="bold" fill="##2e7d32">[XX.X% ACCEPTANCE]</tspan> [CE_SENTENCE]; <tspan font-weight="bold" fill="#e07b00">[XX.X% NEEDS ATTENTION]</tspan>.</text>
+    </svg>
+  </component>
+  <!-- Visualization Pages (NEW) -->
+  <component type="efficacy-bar">
+    <svg viewBox="0 0 900 200" width="900" height="200" xmlns="http://www.w3.org/2000/svg" font-family="Arial, sans-serif">
+      <rect x="50" y="40" width="800" height="120" fill="#f8f9fa" />
+      <line x1="50" y1="95" x2="850" y2="95" stroke="#dee2e6" stroke-width="1" />
+      <rect x="200" y="90" width="80" height="-25" fill="#2e7d32" transform="translate(0,0)" />
+      <rect x="200" y="90" width="80" height="25" fill="#ffffff" transform="translate(0,0)" />
+      <text x="240" y="76" font-size="11" font-weight="bold" fill="#212529">CLINS</text>
+      <text x="240" y="96" font-size="11" fill="#212529">±15.3%</text>
+      <rect x="350" y="70" width="90" height="-20" fill="#e07b00" transform="translate(0,0)" />
+      <rect x="350" y="70" width="90" height="20" fill="#ffffff" transform="translate(0,0)" />
+      <text x="395" y="56" font-size="11" font-weight="bold" fill="#212529">FE</text>
+      <text x="395" y="76" font-size="11" fill="#212529">±8.7%</text>
+      <rect x="500" y="50" width="100" height="-15" fill="#c62828" transform="translate(0,0)" />
+      <rect x="500" y="50" width="100" height="15" fill="#ffffff" transform="translate(0,0)" />
+      <text x="550" y="36" font-size="11" font-weight="bold" fill="#212529">INST</text>
+      <text x="550" y="56" font-size="11" fill="#212529">±22.4%</text>
+      <text x="50" y="30" font-size="14" font-weight="bold" fill="#333333">CLINS Metrics Comparison</text>
+      <text x="50" y="500" font-size="10" fill="#666666">颜色编码：green=正向效应、orange=谨慎、red=负向效应</text>
+      <line x1="50" y1="40" x2="50" y2="95" stroke="#dee2e6" stroke-width="1" />
+      <line x1="850" y1="40" x2="850" y2="95" stroke="#dee2e6" stroke-width="1" />
+      <line x1="50" y1="95" x2="850" y2="95" stroke="#dee2e6" stroke-width="1" />
+    </svg>
+  </component>
+  <component type="consumer-bar">
+    <svg viewBox="0 0 900 200" width="900" height="200" xmlns="http://www.w3.org/2000/svg" font-family="Arial, sans-serif">
+      <rect x="50" y="40" width="800" height="120" fill="#f8f9fa" />
+      <line x1="50" y1="95" x2="850" y2="95" stroke="#dee2e6" stroke-width="1" />
+      <rect x="200" y="90" width="80" height="-15" fill="#2e7d32" transform="translate(0,0)" />
+      <rect x="200" y="90" width="80" height="15" fill="#ffffff" transform="translate(0,0)" />
+      <text x="240" y="76" font-size="11" font-weight="bold" fill="#212529">15.3%</text>
+      <text x="240" y="96" font-size="10" fill="#666666">研究A</text>
+      <rect x="350" y="70" width="90" height="-10" fill="#e07b00" transform="translate(0,0)" />
+      <rect x="350" y="70" width="90" height="10" fill="#ffffff" transform="translate(0,0)" />
+      <text x="395" y="56" font-size="11" font-weight="bold" fill="#212529">8.2%</text>
+      <text x="395" y="76" font-size="10" fill="#666666">研究B</text>
+      <rect x="500" y="50" width="100" height="-5" fill="#c62828" transform="translate(0,0)" />
+      <rect x="500" y="50" width="100" height="5" fill="#ffffff" transform="translate(0,0)" />
+      <text x="550" y="36" font-size="11" font-weight="bold" fill="#212529">5.1%</text>
+      <text x="550" y="56" font-size="10" fill="#666666">研究C</text>
+      <text x="50" y="30" font-size="14" font-weight="bold" fill="#333333">US Consumer Perception</text>
+      <text x="50" y="500" font-size="10" fill="#666666">颜色：green=正向、orange=谨慯、red=负向</text>
+    </svg>
+  </component>
+  <component type="timeseries-line">
+    <svg viewBox="0 0 900 200" width="900" height="200" xmlns="http://www.w3.org/2000/svg" font-family="Arial, sans-serif">
+      <line x1="70" y1="20" x2="70" y2="180" stroke="#dee2e6" stroke-width="2" />
+      <line x1="70" y1="180" x2="200" y2="180" stroke="#dee2e6" stroke-width="2" />
+      <text x="100" y="195" font-size="10" fill="#666666">T1h</text>
+      <text x="170" y="195" font-size="10" fill="#666666">T4W</text>
+      <text x="240" y="195" font-size="10" fill="#666666">T8W</text>
+      <text x="310" y="195" font-size="10" fill="#666666">T12W</text>
+      <text x="380" y="195" font-size="10" fill="#666666">T16W</text>
+      <text x="450" y="195" font-size="10" fill="#666666">T20W</text>
+      <line x1="70" y1="20" x2="70" y2="180" stroke="#dee2e6" stroke-width="1" />
+      <text x="55" y="30" font-size="10" fill="#666666">+30%</text>
+      <text x="55" y="70" font-size="10" fill="#666666">0%</text>
+      <text x="55" y="110" font-size="10" fill="#666666">-20%</text>
+      <text x="55" y="150" font-size="10" fill="#666666">-40%</text>
+      <polyline points="70,90 100,70 170,50 170,90 200,90" fill="none" stroke="#2e7d32" stroke-width="3" />
+      <polyline points="70,130 100,150 170,170 170,130 200,130" fill="none" stroke="#e07b00" stroke-width="3" />
+      <polyline points="70,170 100,190 170,210 170,170 200,170" fill="none" stroke="#c62828" stroke-width="3" />
+      <text x="70" y="5" font-size="14" font-weight="bold" fill="#333333">趋势折线图</text>
+      <text x="70" y="500" font-size="10" fill="#666666">X轴：时间点；Y轴：percentage_change</text>
+    </svg>
+  </component>
+  <component type="region-bar">
+    <svg viewBox="0 0 900 200" width="900" height="200" xmlns="http://www.w3.org/2000/svg" font-family="Arial, sans-serif">
+      <rect x="50" y="20" width="750" height="160" fill="#f8f9fa" />
+      <line x1="50" y1="60" x2="800" y2="60" stroke="#dee2e6" stroke-width="1" />
+      <line x1="50" y1="100" x2="800" y2="100" stroke="#dee2e6" stroke-width="1" />
+      <line x1="50" y1="140" x2="800" y2="140" stroke="#dee2e6" stroke-width="1" />
+      <rect x="100" y="30" width="80" height="-12" fill="#2e7d32" transform="translate(0,0)" />
+      <rect x="100" y="30" width="80" height="12" fill="#ffffff" transform="translate(0,0)" />
+      <text x="145" y="20" font-size="11" font-weight="bold" fill="#212529">CN: +5.2%</text>
+      <rect x="250" y="20" width="80" height="-5" fill="#e07b00" transform="translate(0,0)" />
+      <rect x="250" y="20" width="80" height="5" fill="#ffffff" transform="translate(0,0)" />
+      <text x="295" y="10" font-size="11" font-weight="bold" fill="#212529">US: ±0.5%</text>
+      <rect x="400" y="10" width="90" height="-8" fill="#c62828" transform="translate(0,0)" />
+      <rect x="400" y="10" width="90" height="8" fill="#ffffff" transform="translate(0,0)" />
+      <text x="445" y="0" font-size="11" font-weight="bold" fill="#212529">FR: -3.8%</text>
+      <text x="50" y="10" font-size="14" font-weight="bold" fill="#333333">区域聚合</text>
+      <text x="50" y="500" font-size="10" fill="#666666">展示 CLINS/FE/INSTRUMENTAL 各区域的均值汇总</text>
+      <line x1="50" y1="20" x2="50" y2="60" stroke="#dee2e6" stroke-width="1" />
+      <line x1="800" y1="20" x2="800" y2="60" stroke="#dee2e6" stroke-width="1" />
+      <line x1="50" y1="60" x2="800" y2="60" stroke="#dee2e6" stroke-width="1" />
+      <line x1="50" y1="100" x2="800" y2="100" stroke="#dee2e6" stroke-width="1" />
+      <line x1="50" y1="140" x2="800" y2="140" stroke="#dee2e6" stroke-width="1" />
     </svg>
   </component>
 </deck>

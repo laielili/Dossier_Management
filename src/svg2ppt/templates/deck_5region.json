@@ -136,7 +136,11 @@
     "efficacy-table": "middle_column",
     "consumer-block": "middle_column",
     "summary-block": "right_column",
-    "custom": "middle_column"
+    "custom": "middle_column",
+    "efficacy-bar": "middle_column",
+    "consumer-bar": "middle_column",
+    "timeseries-line": "middle_column",
+    "region-bar": "middle_column"
   },
   "stacking": {
     "default_gap": 8,
