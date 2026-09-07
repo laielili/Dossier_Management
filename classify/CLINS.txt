@@ -1,5 +1,10 @@
 Clinical report. First page identifies a clinical study, clinical trial,
-clinical evaluation, or clinical investigation. Contains terms: clinical,
-investigator, dermatological, efficacy, tolerance, safety, before/after,
-grader assessment, instrumental clinical measurement, endpoints,
-adverse event. Measured clinical outcomes under controlled conditions.
+clinical evaluation, clinical investigation, or instrumental measurement.
+Contains terms: clinical, investigator, dermatological, efficacy, tolerance,
+safety, before/after, grader assessment, instrumental clinical measurement,
+endpoints, adverse event, corneometer, tewameter, primos, skin hydration,
+transepidermal water loss, TEWL, barrier function, roughness, elasticity,
+firmness, biophysical, instrumental, objective measurement, skin properties.
+Measured clinical outcomes and skin biophysical parameters under controlled
+conditions. 角质层水分, 经皮水分流失, 皮肤屏障功能, 粗糙度, 弹性, 坚韧度,
+生物物理, 仪器测量, 客观测量, 皮肤生物物理参数, 角质计, 经表皮水分流失仪, 皮肤成像分析

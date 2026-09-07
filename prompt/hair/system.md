@@ -62,13 +62,13 @@ component_cardinality:
 - type: `summary-block`
   count: **exactly 1**
   rule: |
-  one right-column summary card: `OVERALL` (always) + a labeled line per report type **present in the JSON** (`CLINICAL` / `SENSORY` / `INSTRUMENTAL` / `CONSUMER`) + a labeled line per present ISO country code (`CN` / `US` / `FR` / ...).
+  one right-column summary card: `OVERALL` (always) + a labeled line per report type **present in the JSON** (`CLINICAL` / `SENSORY` / `CONSUMER`) + a labeled line per present ISO country code (`CN` / `US` / `FR` / ...).
   OMIT every by-type line whose type has no data; OMIT the entire by-region sub-section when **every** result's `study_region` is `null`.
   The three sub-sections (OVERALL / by-type / by-region) stack inside ONE `<svg>` — never emit a second `summary-block`.
 - type: `efficacy-table`
   count: **1 per study/report**
   rule: |
-  N studies ⇒ N components (CLINS / FE / INSTRUMENTAL studies use this component); if one study is very long, split it into further `efficacy-table` components (e.g. `Study A (1/2)`, `Study A (2/2)`).
+  N studies ⇒ N components (CLINS / FE studies use this component); if one study is very long, split it into further `efficacy-table` components (e.g. `Study A (1/2)`, `Study A (2/2)`).
   Every study header MUST carry the `[<study_region>]` suffix per the study_region suffix rule (use `[—]` when JSON study_region is null).
 - type: `consumer-block`
   count: **1 per consumer-perception test**
@@ -82,7 +82,7 @@ component_cardinality:
 - type: `efficacy-bar`
   count: **0–1**
   rule: |
-  visualization-only component (rendered AFTER all efficacy-table / consumer-block components). One horizontal bar chart comparing CLINS / FE / INSTRUMENTAL metric `percentage_change` values at their primary timepoint, grouped by study. Self-titled (one `<text>` line at the top). Rendered via d3 → pure SVG elements with inline attributes. Height must fit the middle_column ≈ 405 px budget; split into `efficacy-bar (1/2)` / `efficacy-bar (2/2)` if a single chart would overflow.
+  visualization-only component (rendered AFTER all efficacy-table / consumer-block components). One horizontal bar chart comparing CLINS / FE metric `percentage_change` values at their primary timepoint, grouped by study. Self-titled (one `<text>` line at the top). Rendered via d3 → pure SVG elements with inline attributes. Height must fit the middle_column ≈ 405 px budget; split into `efficacy-bar (1/2)` / `efficacy-bar (2/2)` if a single chart would overflow.
 - type: `consumer-bar`
   count: **0–1**
   rule: |
@@ -94,6 +94,6 @@ component_cardinality:
 - type: `region-bar`
   count: **0–1**
   rule: |
-  visualization-only component. One bar chart aggregated by `study_region` (CN / US / FR / … or `[—]` if all null): each bar = the mean of CLINS / FE / INSTRUMENTAL `percentage_change` at the primary timepoint for that region. Self-titled. Rendered via d3 → pure SVG, inline attributes, ≤ 405 px tall. OMIT the component entirely when every JSON result has `study_region: null`.
+  visualization-only component. One bar chart aggregated by `study_region` (CN / US / FR / … or `[—]` if all null): each bar = the mean of CLINS / FE `percentage_change` at the primary timepoint for that region. Self-titled. Rendered via d3 → pure SVG, inline attributes, ≤ 405 px tall. OMIT the component entirely when every JSON result has `study_region: null`.
 
 ---

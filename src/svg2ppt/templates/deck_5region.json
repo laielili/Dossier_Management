@@ -1,6 +1,6 @@
 {
   "name": "deck_5region",
-  "description": "L'Oréal synthesis deck layout derived from prompt/system.md. Canvas 1000x562.5 (16:9).",
+  "description": "L'Oréal synthesis deck layout derived from prompt/skincare/system_skincare.md. Canvas 1000x562.5 (16:9).",
   "canvas": {
     "width": 1000,
     "height": 562.5,
