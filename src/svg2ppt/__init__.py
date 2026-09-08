@@ -12,7 +12,7 @@ Minimal usage:
     )
     print(result.pptx_path, result.page_count)
 
-The module intentionally does not know about FastAPI or the legacy html2pptx
+
 pipeline; those bindings live in src/api.py when added later.
 """
 

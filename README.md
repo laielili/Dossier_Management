@@ -23,8 +23,8 @@ over user-editable term lists.
 
 ## Report Types
 
-| Type    | Meaning             | First-page signal used for auto-classification |
-| ------- | ------------------- | ---------------------------------------------- |
+| Type      | Meaning             | First-page signal used for auto-classification |
+| --------- | ------------------- | ---------------------------------------------- |
 | `CLINS` | Clinical            | clinical study / dermatological signals        |
 | `FE`    | Sensory             | sensory evaluation signals                     |
 | `CE`    | Consumer Evaluation | consumer test / panel signals                  |
@@ -56,7 +56,6 @@ the PDFs it already has.*
 │       search.html    (Dossier Search, new homepage "/")        │
 │       file_listener.html (File Listener pipeline UI, "/FileListener") │
 │       svg2ppt.html   (SVG → PPTX deck builder)                │
-│       html2pptx.html (HTML → PPTX utility)                     │
 │     src/api.py (FastAPI) — run, auto-watch, retrieval,         │
 │     config modal, live activity log                            │
 ├────────────────────────────────────────────────────────────────┤
@@ -81,24 +80,22 @@ the PDFs it already has.*
 └────────────────────────────────────────────────────────────────┘
 ```
 
-| Layer                 | Responsibility                                                                                              |
-| --------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **Interface**   | What the user touches — single-screen web UI + REST API.                                                    |
-| **Orchestration** | Sequences the per-project chain, serializes concurrent work, streams progress to the UI.                    |
-| **Processing**  | Stateless workers: convert → parse → classify → index → denoise → write cleaned PDF copies. |
-| **Storage**     | Page-text index (JSON, no vectors), screenshot cache, denoised per-document PDFs under `Dossier_condensed/<project>/`. |
-| **Config**      | Paths, noise-deletion thresholds, and the user-editable term lists. Runtime overrides persisted to `config_overrides.json`. |
+| Layer                   | Responsibility                                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Interface**     | What the user touches — single-screen web UI + REST API.                                                                    |
+| **Orchestration** | Sequences the per-project chain, serializes concurrent work, streams progress to the UI.                                     |
+| **Processing**    | Stateless workers: convert → parse → classify → index → denoise → write cleaned PDF copies.                             |
+| **Storage**       | Page-text index (JSON, no vectors), screenshot cache, denoised per-document PDFs under`Dossier_condensed/<project>/`.      |
+| **Config**        | Paths, noise-deletion thresholds, and the user-editable term lists. Runtime overrides persisted to`config_overrides.json`. |
 
 ---
 
 ## The Workflow
 
-### 1 · Point the app at a Listen Folder
+### 1 · Point the app at a Folder
 
-The **Listen Folder** is the base directory that holds your project folders.
-Saved to `listen_folder.txt` as an ordered history — the first line is the
-*active* folder, the rest is a re-selectable list in the Browse modal. The path
-is intentionally **never written to the log files**.
+The selected **Folder** is the base directory that holds your project folders.
+The path is intentionally **never written to the log files**.
 
 ```
 <Listen Folder>/
@@ -115,10 +112,10 @@ is intentionally **never written to the log files**.
 
 ### 2 · Run — one click, or fully automatic
 
-| Mode                  | Trigger                            | Scope                                          |
-| --------------------- | ---------------------------------- | ---------------------------------------------- |
-| **Run Full Pipeline** | button                             | every eligible project folder, sequentially    |
-| **Auto-Watch**        | toggle                             | any **new** project folder dropped in while ON |
+| Mode                        | Trigger | Scope                                               |
+| --------------------------- | ------- | --------------------------------------------------- |
+| **Run Full Pipeline** | button  | every eligible project folder, sequentially         |
+| **Auto-Watch**        | toggle  | any**new** project folder dropped in while ON |
 
 Both drive the same 4-stage chain per project, shown live in the stage tracker:
 
@@ -161,8 +158,8 @@ at the **parent `Dossier_condensed/`** after a multi-project Run Full Pipeline.
   only); the underlying thresholds live in `src/config.py`.
 
 **You give:** a folder of raw dossiers.
-**You get:** a folder of denoised dossiers — one cleaned PDF per source file,
-ready for the LLM, under `<Listen Folder>/Dossier_condensed/<project>/`.
+**You get:** a folder of denoised dossiers — one cleaned folder with source file,
+ready for the LLM, under `<AI_feed>`.
 
 ---
 
@@ -203,13 +200,13 @@ lost. There is no TF-IDF, no score floor, and no ranking/truncation.
 `retriever.classify_noise()` returns a category only on strong structural
 evidence:
 
-| Category     | Detected when                                                                 |
-| ------------ | ----------------------------------------------------------------------------- |
-| `toc`        | A table-of-contents header appears in the first few lines.                    |
-| `cover`      | Low text, large title font, no table/list, fewer than `COVER_MAX_FIGURES`.   |
-| `blank`      | Little text, no figure/table/list, and a small font.                          |
-| `closing`    | Short page whose text matches a closing marker (e.g. "Thank you", "Appendix").|
-| `boilerplate`| Text is almost entirely lines repeated across many pages of the same type.   |
+| Category        | Detected when                                                                  |
+| --------------- | ------------------------------------------------------------------------------ |
+| `toc`         | A table-of-contents header appears in the first few lines.                     |
+| `cover`       | Low text, large title font, no table/list, fewer than`COVER_MAX_FIGURES`.    |
+| `blank`       | Little text, no figure/table/list, and a small font.                           |
+| `closing`     | Short page whose text matches a closing marker (e.g. "Thank you", "Appendix"). |
+| `boilerplate` | Text is almost entirely lines repeated across many pages of the same type.     |
 
 A cross-page pass (`_detect_boilerplate`) flags template / footer-only pages.
 `UNKNOWN`-type (unclassified) files **are** still indexed and denoised — only
@@ -274,6 +271,10 @@ why the old single merged PDF was retired.
 ## Quick Start
 
 ```bash
+py -m venv venv
+
+venv/scripts/activate
+
 pip install -r requirements.txt
 
 # Web UI (recommended)
@@ -303,40 +304,38 @@ python main.py reset    --project-id PROJ-001   # clear index + screenshots
 
 ## REST API
 
-| Method       | Path                       | Purpose                                                     |
-| ------------ | -------------------------- | ----------------------------------------------------------- |
-| `GET`        | `/`                        | Dossier Search UI (new homepage)                           |
-| `GET`        | `/html2pptx`               | HTML → PPTX utility page                                    |
-| `GET/POST`   | `/config/listen-folder`    | Read / save the active Listen Folder                        |
-| `GET`        | `/config/listen-folders`   | Full saved-folder history                                   |
-| `DELETE`     | `/config/listen-folder`    | Remove one saved folder (`?path=`)                          |
-| `GET`        | `/browse-folders`          | Folder-picker backend (`?path=`; drives when empty)         |
-| `GET/POST`   | `/config/params`           | Read the active noise categories + veto terms               |
-| `POST`       | `/run-all`                 | One-click chain for **all** project folders (background)    |
-| `GET`        | `/run-all/status`          | Stage-tracker state of the running job                      |
-| `GET`        | `/activity?since=<id>`     | Incremental activity feed for the UI log                    |
-| `GET/POST`   | `/watch`                   | Auto-watch state / toggle                                   |
-| `POST`       | `/project/scan`            | List unclassified dossiers in one project folder            |
-| `POST`       | `/classify`                | Classify one project folder                                 |
-| `POST`       | `/classify/confirm`        | Apply manual type decisions (move files)                    |
-| `GET/POST`   | `/classify/profiles[/save]`| Read / write `classify/*.txt`                               |
-| `GET/POST`   | `/queries[/save]`          | Read / write `queries/query.txt`                            |
-| `POST`       | `/ingest`                  | Per-project: parse + build the page index                   |
-| `POST`       | `/package` `/run`            | Per-project pipeline steps (denoise source dossiers)            |
-| `GET`        | `/status`                  | Index stats                                                 |
-| `POST`       | `/reset`                   | Clear index + screenshots (derived state only)              |
-| `POST`       | `/clear`                   | Full wipe: project folders + Dossier_condensed + derived state (index/screenshots) |
-| `GET/POST`   | `/config/pptx-output`      | Read / save the PPTX output folder                          |
-| `POST`       | `/html2pptx/save`          | Persist a browser-generated PPTX                            |
-| `GET`        | `/FileListener`             | Original Listen-Folder pipeline UI (File Listener)         |
-| `POST`       | `/search`                   | Keyword search for dossier files under a target path       |
-| `POST`       | `/retrieve/start`           | Copy selected files → `retrieved/<name>/` + start pipeline  |
-| `GET`        | `/retrieve/status`          | Retrieval preprocessing progress (stage tracker)           |
-| `GET/POST/DELETE` | `/config/search-paths` | Read / save / remove the search-path history            |
-| `GET`        | `/svg2ppt`                  | SVG → PPTX deck-builder page                               |
-| `POST`       | `/svg2ppt/build`            | Build a 5-region PPTX deck from `<deck>` XML               |
-| `GET`        | `/svg2ppt/files/{run_id}/{filename}` | Download a built deck / preview                  |
-| `GET`        | `/download/{project_id}`    | Download a project's denoised deliverables                 |
+| Method              | Path                                   | Purpose                                                                            |
+| ------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- |
+| `GET`             | `/`                                  | Dossier Search UI (new homepage)                                                   |
+| `GET/POST`        | `/config/listen-folder`              | Read / save the active Listen Folder                                               |
+| `GET`             | `/config/listen-folders`             | Full saved-folder history                                                          |
+| `DELETE`          | `/config/listen-folder`              | Remove one saved folder (`?path=`)                                               |
+| `GET`             | `/browse-folders`                    | Folder-picker backend (`?path=`; drives when empty)                              |
+| `GET/POST`        | `/config/params`                     | Read the active noise categories + veto terms                                      |
+| `POST`            | `/run-all`                           | One-click chain for**all** project folders (background)                      |
+| `GET`             | `/run-all/status`                    | Stage-tracker state of the running job                                             |
+| `GET`             | `/activity?since=<id>`               | Incremental activity feed for the UI log                                           |
+| `GET/POST`        | `/watch`                             | Auto-watch state / toggle                                                          |
+| `POST`            | `/project/scan`                      | List unclassified dossiers in one project folder                                   |
+| `POST`            | `/classify`                          | Classify one project folder                                                        |
+| `POST`            | `/classify/confirm`                  | Apply manual type decisions (move files)                                           |
+| `GET/POST`        | `/classify/profiles[/save]`          | Read / write`classify/*.txt`                                                     |
+| `GET/POST`        | `/queries[/save]`                    | Read / write`queries/query.txt`                                                  |
+| `POST`            | `/ingest`                            | Per-project: parse + build the page index                                          |
+| `POST`            | `/package` `/run`                  | Per-project pipeline steps (denoise source dossiers)                               |
+| `GET`             | `/status`                            | Index stats                                                                        |
+| `POST`            | `/reset`                             | Clear index + screenshots (derived state only)                                     |
+| `POST`            | `/clear`                             | Full wipe: project folders + Dossier_condensed + derived state (index/screenshots) |
+| `GET/POST`        | `/config/pptx-output`                | Read / save the PPTX output folder                                                 |
+| `GET`             | `/FileListener`                      | Original Listen-Folder pipeline UI (File Listener)                                 |
+| `POST`            | `/search`                            | Keyword search for dossier files under a target path                               |
+| `POST`            | `/retrieve/start`                    | Copy selected files →`retrieved/<name>/` + start pipeline                       |
+| `GET`             | `/retrieve/status`                   | Retrieval preprocessing progress (stage tracker)                                   |
+| `GET/POST/DELETE` | `/config/search-paths`               | Read / save / remove the search-path history                                       |
+| `GET`             | `/svg2ppt`                           | SVG → PPTX deck-builder page                                                      |
+| `POST`            | `/svg2ppt/build`                     | Build a 5-region PPTX deck from`<deck>` XML                                      |
+| `GET`             | `/svg2ppt/files/{run_id}/{filename}` | Download a built deck / preview                                                    |
+| `GET`             | `/download/{project_id}`             | Download a project's denoised deliverables                                         |
 
 > **`/reset` is deliberately non-destructive** — it only removes *derived* state
 > (index, screenshots). The `/clear` button is the opposite: it permanently
@@ -349,59 +348,30 @@ python main.py reset    --project-id PROJ-001   # clear index + screenshots
 
 ## Configuration Reference
 
-| Knob                              | Where                          | Default | Meaning                                     |
-| --------------------------------- | ------------------------------ | ------- | ------------------------------------------- |
-| Listen Folder                     | `listen_folder.txt` (UI)       | —       | Base dir for project folders; line 1 active |
-| `DELETE_MIN_KEEP`                 | `config.py`                    | `3`     | Type emptied by deletion ⇒ keep N best + warn |
-| `TOP_N_PER_TYPE`                  | `config.py` / `--top-n`        | `12`    | Ceiling, **only** when explicitly requested |
-| `SCREENSHOT_DPI`                  | `config.py`                    | `300`   | Page screenshot resolution (ingest cache)   |
-| `CLASSIFY_MIN_SCORE` / `_MARGIN`  | `config.py`                    | `1` / `1` | Auto-file gate (else manual review)       |
-| Noise thresholds                  | `config.py`                    | —       | `BLANK_MAX_CHARS` (30), `BLANK_MAX_FONT` (18), `COVER_MIN_FONT` (20), `COVER_MAX_CHARS` (60), `COVER_MAX_FIGURES` (3), `CLOSING_MAX_CHARS` (120), `BOILERPLATE_MIN_PAGES` (10), `BOILERPLATE_MIN_UNIQUE_CHARS` (40), `VETO_MIN_UNIQUE_CHARS` (10) — code-defined, not user-tunable via UI |
-| `pptx_output_dir`                 | `config_overrides.json` (UI)   | Downloads | Where HTML → PPTX writes                  |
+| Knob                                 | Where                          | Default       | Meaning                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------ | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Listen Folder                        | `listen_folder.txt` (UI)     | —            | Base dir for project folders; line 1 active                                                                                                                                                                                                                                                                  |
+| `DELETE_MIN_KEEP`                  | `config.py`                  | `3`         | Type emptied by deletion ⇒ keep N best + warn                                                                                                                                                                                                                                                               |
+| `TOP_N_PER_TYPE`                   | `config.py` / `--top-n`    | `12`        | Ceiling,**only** when explicitly requested                                                                                                                                                                                                                                                             |
+| `SCREENSHOT_DPI`                   | `config.py`                  | `300`       | Page screenshot resolution (ingest cache)                                                                                                                                                                                                                                                                    |
+| `CLASSIFY_MIN_SCORE` / `_MARGIN` | `config.py`                  | `1` / `1` | Auto-file gate (else manual review)                                                                                                                                                                                                                                                                          |
+| Noise thresholds                     | `config.py`                  | —            | `BLANK_MAX_CHARS` (30), `BLANK_MAX_FONT` (18), `COVER_MIN_FONT` (20), `COVER_MAX_CHARS` (60), `COVER_MAX_FIGURES` (3), `CLOSING_MAX_CHARS` (120), `BOILERPLATE_MIN_PAGES` (10), `BOILERPLATE_MIN_UNIQUE_CHARS` (40), `VETO_MIN_UNIQUE_CHARS` (10) — code-defined, not user-tunable via UI |
+| `pptx_output_dir`                  | `config_overrides.json` (UI) | Downloads     | Where HTML → PPTX writes                                                                                                                                                                                                                                                                                    |
 
 `classify/*.txt` and `queries/query.txt` are **two different things and both are
 needed**: the former decides *which bucket a document goes into*, the latter
 supplies the *veto terms* that rescue an otherwise-noise page (its Title Anchors
+
 + Table Features sections; Metric Keywords / Other sections are not used for
-scoring). The classifier is intentionally left on the simple lexical scorer and
-the denoise stage is rule-based noise classification — neither uses TF-IDF.
-
----
-
-## Side Utility — HTML → PPTX (`/html2pptx`)
-
-A second page, reachable from the **HTML → PPTX** button in the header, turns
-AI-generated slide **markup** into a real `.pptx`. AI tools return HTML *code*,
-not files, so the page takes pasted source — no upload.
-
-```
-paste HTML code → [Convert] → <output folder>/<name>.pptx
-```
-
-**Where the conversion runs.** The vendored `html-to-pptx` library is not an HTML
-parser — it walks a *rendered* DOM and reads `getComputedStyle()` /
-`getBoundingClientRect()` / `offsetWidth`, values that only exist after a real
-CSS layout engine has run. So the pasted markup is rendered in an **off-screen,
-same-origin iframe** in the browser (the browser *is* the layout engine),
-converted there, and the resulting bytes are POSTed to the backend, which writes
-the file into the chosen folder. **Zero extra Python dependencies** — no
-Playwright, no headless Chromium.
-
-| Concern         | Behaviour                                                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Slide detection | `auto` tries `page` / `slide` / `h-ppt-page` / `ppt-page`; otherwise top-level blocks become slides. Override with a class name. Hidden / zero-size elements are skipped. |
-| Output folder   | Defaults to the system **Downloads** folder; editable + Browse picker, persisted in `config_overrides.json` (`pptx_output_dir`). |
-| Naming          | Sanitised, `.pptx` enforced, auto-suffixed `name (2).pptx` instead of overwriting.                                         |
-| Code fences     | Markdown ```` ```html ```` wrappers are stripped automatically.                                                            |
-| CDN decks       | Tailwind / Chart.js CDNs work — fonts, images and runtime CSS are awaited before measuring.                                |
-| Safety          | Pasted scripts **do execute locally** during rendering (required for CDN decks). The server validates the ZIP magic, caps payloads at 80 MB, and strips any path component from the file name. |
+  scoring). The classifier is intentionally left on the simple lexical scorer and
+  the denoise stage is rule-based noise classification — neither uses TF-IDF.
 
 ---
 
 ## Side Utility — SVG → PPTX (`/svg2ppt`)
 
-A companion to HTML → PPTX, reachable from the **SVG → PPTX** button in the
-header. Where HTML → PPTX reverses *rendered* CSS geometry (error-prone), this
+Reachable from the **SVG → PPTX** button in the
+header. Where XML → PPTX reverses *rendered* CSS geometry (error-prone), this
 builder consumes **content SVG components** whose geometry is already exact, so
 layout mistakes are structurally eliminated.
 
@@ -420,21 +390,21 @@ into a 5-region page template (from `prompt/system.md`: `top_banner` /
 paste/upload <deck> XML → [Build] → output/<run>/synthesis_deck.pptx + preview.html
 ```
 
-| Concern  | Behaviour                                                                                         |
-| -------- | ------------------------------------------------------------------------------------------------ |
-| Input    | `<deck>` XML (components carry `type` for region routing; AI writes no x/y).                     |
-| Layout   | 5-region template, vertical stacking, overflow → continuation page (repeats chrome, middle only). |
-| Rendering| PyMuPDF rasterises each component SVG → Pillow composites the page → python-pptx 16:9 slide.     |
-| Output   | Image-type PPTX (visually faithful, not shape-editable) + HTML preview for human QA.             |
-| Theme    | L'Oréal palette from `prompt/system.md`; canvas fixed 16:9.                                      |
-| Deps     | `python-pptx` + `Pillow` + `PyMuPDF` (no browser, no headless).                                  |
+| Concern   | Behaviour                                                                                          |
+| --------- | -------------------------------------------------------------------------------------------------- |
+| Input     | `<deck>` XML (components carry `type` for region routing; AI writes no x/y).                   |
+| Layout    | 5-region template, vertical stacking, overflow → continuation page (repeats chrome, middle only). |
+| Rendering | PyMuPDF rasterises each component SVG → Pillow composites the page → python-pptx 16:9 slide.     |
+| Output    | Image-type PPTX (visually faithful, not shape-editable) + HTML preview for human QA.               |
+| Theme     | L'Oréal palette from`prompt/system.md`; canvas fixed 16:9.                                      |
+| Deps      | `python-pptx` + `Pillow` + `PyMuPDF` (no browser, no headless).                              |
 
 Design notes: `synthesis_deck_design.md`. Module layout:
 `src/svg2ppt/{schema,layout,render,api}.py` + `templates/deck_5region.json`.
 
 ---
 
-## Downstream Companion Prompt
+## Downstream AI Prompt
 
 `prompt/system.md` is the system prompt for the downstream multimodal LLM
 that consumes the denoised dossier PDFs. Two mutually-isolated modes are routed
@@ -467,9 +437,6 @@ static/                     frontend pages (shared style.css):
                               search.html · search-app.js   (Dossier Search, "/")
                               file_listener.html · app.js    (File Listener pipeline, "/FileListener")
                               svg2ppt.html · svg2ppt-app.js (SVG → PPTX)
-                              html2pptx.html · html2pptx.js (HTML → PPTX)
-html-to-pptx/               vendored browser-side HTML→PPTX converter
-                            (dist/html-to-pptx.min.js is the only runtime file)
 queries/query.txt           unified veto-term lexicon (Title Anchors +
                             Table Features; editable)
 classify/{CLINS,FE,CE}.txt  first-page classification anchors     (editable)
@@ -499,17 +466,3 @@ to `_trash/`; deliverables are now the per-document denoised PDFs above.
 ## Tech Stack
 
 PyMuPDF · Pillow · python-pptx · FastAPI · uvicorn · pydantic · comtypes (Office COM)
-
-### Design constraints worth keeping
-
-* **No vector DB, no embedding model.** The corpus is a small, structured set of
-  project reports and the analysis frame is already expressed as an editable term
-  list, so rule-based noise classification is sufficient, deterministic and fully
-  explainable.
-* **No static summary flag.** Denoising is recomputed every run from the current
-  lexicon and thresholds, so retuning is instant and reversible.
-* **Deletion, not ranking.** Keep-all / drop-noise never silently loses mid-rank
-  but still-valid pages the way a top-N truncation would.
-* **Source files are sacred.** The pipeline only *reads* the dossiers and *writes
-  new cleaned copies* under `Dossier_condensed/`; the original files are never
-  touched except for an Office source whose PDF has been verified on disk.

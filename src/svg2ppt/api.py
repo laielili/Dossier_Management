@@ -7,7 +7,7 @@ into src/api.py via:
     from .svg2ppt.api import router as svg2ppt_router
     app.include_router(svg2ppt_router)
 
-Nothing here touches the existing html2pptx pipeline or the dossier pipeline.
+
 
 Routes:
   GET  /svg2ppt                  — serve the SVG -> PPTX frontend page
