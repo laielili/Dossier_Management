@@ -33,6 +33,9 @@ set "PORT_CANDIDATES=8000 8001 8080 8888 9000"
 set "RESUME_FLAG=__after_python_install__"
 set "VENV_DIR=%~dp0venv"
 set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
+REM  Path to the bundled offline Python installer. It ships inside the project
+REM  folder (src\python-3.12.6-amd64.exe) so no drive letter / network is needed.
+set "PY_INSTALLER=%~dp0src\python-3.12.6-amd64.exe"
 
 if /i "%~1"=="%RESUME_FLAG%" goto :locate_python
 
@@ -41,7 +44,7 @@ echo ==== Dossier_Management bootstrap ====
 echo.
 
 REM ---------------------------------------------------------------------------
-REM 1. Locate the project-local Python interpreter (installs one from K: if missing)
+REM 1. Locate the project-local Python interpreter (installs one from the bundled installer if missing)
 REM ---------------------------------------------------------------------------
 
 :locate_python
@@ -70,10 +73,10 @@ if /i "%~1"=="%RESUME_FLAG%" (
     exit /b 1
 )
 
-set "PY_INSTALLER=K:\Software\Python\python-3.12.6-amd64.exe"
 set "PY_DIR=%~dp0python"
+echo [i] Looking for Python installer at: %PY_INSTALLER%
 if exist "%PY_INSTALLER%" (
-    echo [i] Installing Python 3.12.6 into %PY_DIR% ^(project-local, no PATH change^) ...
+    echo [i] Installing Python 3.12.6 into %PY_DIR% ...
     "%PY_INSTALLER%" /quiet InstallAllUsers=0 PrependPath=0 TargetDir="%PY_DIR%"
     set "BASE_PY=%PY_DIR%\python.exe"
     goto :setup_venv
@@ -81,9 +84,9 @@ if exist "%PY_INSTALLER%" (
 
 echo [!] Python installer not found at:
 echo       %PY_INSTALLER%
-echo     Please install Python 3.12 manually from https://www.python.org/downloads/
-echo     ^(tick "Add python.exe to PATH" during setup, or choose "Install just for me"^), then run start.bat again.
-echo     Tip: choosing "Install just for me" needs no administrator rights.
+echo     Please copy python-3.12.6-amd64.exe into the project's src\ folder, then run start.bat again.
+echo     Or install Python 3.12 manually from https://www.python.org/downloads/
+echo     ^(choose "Install just for me", needs no administrator rights^).
 pause
 exit /b 1
 
