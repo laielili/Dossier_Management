@@ -252,5 +252,5 @@ echo.
 echo [ok] Done. The UI should now be open in your browser (http://localhost:%PORT%).
 echo      The server runs in the "Dossier_Management Server" window.
 echo      Close that window to stop it.
-echo.
-pause
+echo
+timeout /t 5
