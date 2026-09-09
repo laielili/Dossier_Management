@@ -77,3 +77,15 @@ demo/
 
 #Local saved search_paths
 config_overrides.json
+# ---------- Offline Python installer (do not commit) ----------
+# Large (~25 MB) standalone installer. start.bat pulls it from the network
+# share (K:/Software/Python/) rather than from the repo, so it must never
+# enter version control.
+src/python-3.12.6-amd64.exe
+
+# ---------- prompt/Beta (local working drafts, do not commit) ----------
+# Private/working drafts under prompt/Beta/ stay local and must never be
+# pushed to the repo. On disk the folder is "Beta" (capital B) while the
+# index historically stored it as "beta" - Windows is case-insensitive,
+# so this rule covers both.
+prompt/Beta/

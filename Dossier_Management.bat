@@ -159,15 +159,12 @@ if exist "%PY_INSTALLER%" (
 )
 echo [!] Did not find the package at %PY_INSTALLER%.
 echo     Please check the network connection / that the share is mapped.
-echo     Detected disks:
-wmic logicaldisk get name
+pause
 exit /b 1
 
 :no_installer
 echo [!] Did not find the package at %PY_INSTALLER%.
 echo     Please check the network connection / that the share is mapped.
-echo     Detected disks:
-wmic logicaldisk get name
 pause
 exit /b 1
 
@@ -179,18 +176,21 @@ REM ---------------------------------------------------------------------------
 echo.
 echo [2/3] Preparing virtual environment and installing dependencies ...
 
-if not exist "%VENV_PY%" (
-    echo [i] Creating virtual environment in %VENV_DIR% ...
-    "%BASE_PY%" -m venv "%VENV_DIR%"
-    if errorlevel 1 (
-        echo.
-        echo [!] Failed to create the virtual environment.
-        echo     Check that Python 3.12 runs correctly: %BASE_PY%
-        pause
-        exit /b 1
-    )
+if exist "%VENV_PY%" (
+    echo [i] Existing virtualenv found at %VENV_DIR% - skipping creation
+    goto :deps_install
+)
+echo [i] Creating virtual environment in %VENV_DIR% ...
+"%BASE_PY%" -m venv "%VENV_DIR%"
+if errorlevel 1 (
+    echo.
+    echo [!] Failed to create the virtual environment.
+    echo     Check that Python 3.12 runs correctly: %BASE_PY%
+    pause
+    exit /b 1
 )
 
+:deps_install
 echo [i] Installing dependencies from requirements.txt into the venv ...
 REM Network on the target machines is flaky but all dependencies do install
 REM fine once the connection holds, so retry the whole pip pass up to 10 times.
