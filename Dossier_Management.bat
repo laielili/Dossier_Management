@@ -3,6 +3,9 @@ setlocal
 
 cd /d "%~dp0"
 
+REM  Set when this window was started by the hand-over at :hand_over.
+if /i "%~1"=="--restart" set "RESTARTED=1"
+
 REM ===========================================================================
 REM  Dossier_Management - one-click bootstrap
 REM
@@ -17,6 +20,9 @@ REM       check happen in a single pass.
 REM    2. if nothing qualifies, fall back to the installer on the central
 REM       network share K:\Software\Python. If that share is not reachable
 REM       from this machine, download the same installer from python.org.
+REM    2b. if an installer had to be run, hand over to a fresh window and stop
+REM        there; that window re-detects the launcher and carries on. The
+REM        --restart marker tells it not to download or install a second time.
 REM    3. create a project-local virtualenv - venv - and install the
 REM       dependencies listed in requirements.txt into it.
 REM    4. start "main.py serve" with the venv interpreter and open the UI.
@@ -46,6 +52,13 @@ REM    - never place a command that might not exist on the left of a pipe.
 REM      cmd aborts the whole script with exit code 255 instead of reporting
 REM      an error, and it does so even inside a called subroutine. Write the
 REM      output to a file first, then chain only always-present commands.
+REM    - never call the launcher by bare name either. Resolve py.exe through
+REM      an absolute path, as :probe_py does: after a fresh install the
+REM      launcher may live in a folder that is not on PATH, and a window
+REM      opened before the install keeps the environment it started with.
+REM    - wait for the installer to finish. It hands the work to a worker
+REM      process and returns early, so probing right after it exits reports
+REM      a failure while the install is in fact still running.
 REM ===========================================================================
 
 set "PORT_CANDIDATES=8000 8001 8080 8888 9000"
@@ -61,8 +74,9 @@ set "LOCAL_DIR=%USERPROFILE%\python_install"
 set "LOCAL_PATH=%LOCAL_DIR%\python-3.12.10-amd64.exe"
 REM  Anything smaller than this is an error page, not an installer.
 set "MIN_INSTALLER_BYTES=1000000"
-REM  A per-user install drops py.exe here. The running cmd session does not
-REM  see the PATH change, so we prepend this folder by hand after installing.
+REM  A per-user install drops py.exe here, an all-users one puts it in the
+REM  Windows directory. :probe_py looks in both, by absolute path, so that
+REM  detection never depends on PATH.
 set "LAUNCHER_DIR=%LOCALAPPDATA%\Programs\Python\Launcher"
 
 echo.
@@ -83,7 +97,7 @@ goto :python_missing
 
 :python_found
 echo [i] Using the py launcher - Python %PYVER%
-py %PYARG% --version
+"%PYEXE%" %PYARG% --version
 if not errorlevel 1 goto :setup_venv
 REM  The launcher can still list an interpreter whose files were deleted, so
 REM  a registered version is not proof that it starts. Fall back to a fresh
@@ -101,13 +115,30 @@ REM ---------------------------------------------------------------------------
 :python_missing
 echo [!] The py launcher found no interpreter at or above %MIN_MAJOR%.%MIN_MINOR%.
 echo.
+REM  A restarted window already installed Python once. If the launcher still
+REM  sees nothing, running the installer again would only repeat the failure.
+if defined RESTARTED goto :install_failed
 call :fetch_installer
 if not exist "%LOCAL_PATH%" goto :install_failed
 call :check_installer_size
 if not defined INSTALLER_OK goto :install_failed
 call :run_silent_install
-if defined PYARG goto :python_found
-goto :install_failed
+if not defined PYARG goto :install_failed
+REM  A brand new interpreter is not visible to a running window: it keeps the
+REM  environment block it was started with. Hand over to a fresh one, which
+REM  re-detects the launcher and continues with the venv setup.
+if defined RESTARTED goto :python_found
+goto :hand_over
+
+:hand_over
+echo.
+echo [i] Python %PYVER% is installed. Continuing in a new window ...
+REM  Pass the launcher folder down by hand. The child process inherits this
+REM  environment block, and the install that just ran did not touch it.
+for %%F in ("%PYEXE%") do set "PATH=%%~dpF;%PATH%"
+timeout /t 3 /nobreak >nul
+start "Dossier_Management" cmd /c ""%~f0" --restart"
+exit /b 0
 
 :install_failed
 echo.
@@ -117,6 +148,7 @@ echo.
 echo     Next steps, easiest first:
 echo       1. ask IT to install Python %MIN_MAJOR%.%MIN_MINOR% or newer
 echo       2. copy the installer to %LOCAL_DIR% by hand, then run this again
+echo       3. if the installer just ran, close this window and start again
 echo.
 pause
 exit /b 1
@@ -131,7 +163,7 @@ echo [2/3] Preparing the virtual environment ...
 
 if exist "%VENV_PY%" goto :deps_install
 echo [i] Creating it in %VENV_DIR% ...
-py %PYARG% -m venv "%VENV_DIR%"
+"%PYEXE%" %PYARG% -m venv "%VENV_DIR%"
 if not exist "%VENV_PY%" goto :venv_failed
 
 :deps_install
@@ -226,13 +258,22 @@ REM  below discards everything and PYARG stays empty.
 :probe_py
 set "PYLIST=%TEMP%\dm_py_list.txt"
 set "PYLIST_OK=%TEMP%\dm_py_ok.txt"
+REM  Find the launcher by absolute path instead of by bare name. A fresh
+REM  install drops py.exe either into the Windows directory, which is always
+REM  on PATH, or into the per-user launcher folder, which is not on PATH
+REM  unless the installer was told to update it. Checking both keeps
+REM  detection independent of PATH and working in an already-open window.
+set "PYEXE="
+if exist "%SystemRoot%\py.exe" set "PYEXE=%SystemRoot%\py.exe"
+if not defined PYEXE if exist "%LAUNCHER_DIR%\py.exe" set "PYEXE=%LAUNCHER_DIR%\py.exe"
+if not defined PYEXE goto :probe_py_done
 REM  The scan is split into two steps on purpose. Putting a command that may
 REM  not exist - py, on a machine that never had Python - on the left of a
 REM  pipe makes cmd abort the entire script with exit code 255 instead of
 REM  reporting an ordinary error, and it does so even inside a subroutine.
 REM  So the raw listing goes to a file first, and only commands that always
 REM  exist are ever chained together after that.
-py -0p > "%PYLIST%" 2>nul
+"%PYEXE%" -0p > "%PYLIST%" 2>nul
 if not exist "%PYLIST%" goto :probe_py_done
 findstr /r /c:"-V:" "%PYLIST%" | findstr /v /i "WindowsApps" > "%PYLIST_OK%" 2>nul
 if not exist "%PYLIST_OK%" goto :probe_py_done
@@ -312,16 +353,28 @@ if %FSIZE% LSS %MIN_INSTALLER_BYTES% exit /b
 set "INSTALLER_OK=1"
 exit /b
 
-REM  :run_silent_install - installs from LOCAL_PATH, then re-probes the
-REM  launcher. InstallAllUsers=0 needs no administrator rights. PrependPath=0
-REM  leaves the user PATH untouched; instead we prepend the launcher folder
-REM  for this session only, so the re-probe can find py right away.
+REM  :run_silent_install - installs from LOCAL_PATH, then waits for the
+REM  launcher to answer. InstallAllUsers=0 needs no administrator rights.
+REM  PrependPath=0 leaves the user PATH untouched, which costs nothing
+REM  here: :probe_py finds the launcher by absolute path, not via PATH.
 :run_silent_install
 echo [i] Installing Python silently, this can take a minute ...
-"%LOCAL_PATH%" /quiet InstallAllUsers=0 PrependPath=0 Include_test=0 /log "%LOCAL_DIR%\install_log.txt"
+REM  /wait is not optional. Without it the installer returns the moment it
+REM  has handed the work to its worker process, and the launcher is still
+REM  missing when we go looking for it - on a slow machine that gap is wide
+REM  enough to make a perfectly good install look like a failure.
+start "Python installer" /wait "%LOCAL_PATH%" /quiet InstallAllUsers=0 PrependPath=0 Include_test=0 /log "%LOCAL_DIR%\install_log.txt"
 echo [i] Installer finished, re-checking the py launcher ...
-set "PATH=%LAUNCHER_DIR%;%PATH%"
+REM  Probe again, and keep probing for a minute. This covers the case where
+REM  the installer really does exit before its work is done.
+set "WAITED=0"
+:wait_for_launcher
 set "PYARG="
 set "PYVER="
 call :probe_py
-exit /b
+if defined PYARG exit /b 0
+set /a WAITED+=1
+if %WAITED% GEQ 12 exit /b 0
+echo [i] The launcher is not ready yet, checking again in 5 seconds ...
+timeout /t 5 /nobreak >nul
+goto :wait_for_launcher
