@@ -7,228 +7,182 @@ REM ===========================================================================
 REM  Dossier_Management - one-click bootstrap
 REM
 REM  What this script does:
-REM    1. locate a Python 3.12 interpreter - project-local first, then a
-REM       user-level install; if neither exists, install one from the bundled
-REM       installer in src\ (silently first, then via the setup wizard)
-REM    2. create a project-local virtualenv (venv/) and install the
-REM       dependencies listed in requirements.txt into it
-REM    3. start `main.py serve` (using the venv interpreter) and open the UI
+REM    1. locate a Python 3.12+ interpreter through the "py" launcher only.
+REM       The launcher is the one stable entry point on a target machine. The
+REM       bare names "python" and "python3" can be hijacked by the Windows
+REM       Store app-execution alias and open the Store instead of running, so
+REM       they are never used here. "py -0p" lists every registered
+REM       interpreter together with its version, so detection and the version
+REM       check happen in a single pass.
+REM    2. if nothing qualifies, fall back to the installer on the central
+REM       network share K:\Software\Python. If that share is not reachable
+REM       from this machine, download the same installer from python.org.
+REM    3. create a project-local virtualenv - venv - and install the
+REM       dependencies listed in requirements.txt into it.
+REM    4. start "main.py serve" with the venv interpreter and open the UI.
 REM
-REM  COUPLING CONTRACT - this script depends on the project through
-REM  exactly TWO things:
+REM  COUPLING CONTRACT - this script depends on the project through exactly
+REM  TWO things:
 REM      a) the entry point file name "main.py"
 REM      b) that file exposing the "serve" subcommand
 REM
-REM  Everything else is delegated:
-REM    - dependencies come solely from requirements.txt; no package or
-REM      import names are duplicated in this file, so upgrading or adding
-REM      a dependency never requires editing anything here
-REM    - the virtualenv is created once and re-used; pip install is
-REM      idempotent, so re-running this script stays fast
-REM    - the venv keeps the project's packages isolated from the user's
-REM      global Python, so this script never pollutes their system
-REM  Changes inside src/, static/, classify/, queries/ and prompt/ never
-REM  require touching this file either. The only things you would ever
-REM  change here are PORT_CANDIDATES below, or the entry point / subcommand names if
-REM  those are ever renamed.
+REM  Dependencies come solely from requirements.txt, so adding or upgrading a
+REM  dependency never requires editing anything here.
+REM
+REM  A vendored python\ folder used to be the offline fallback. It is no
+REM  longer shipped and must not be probed for again.
+REM
+REM  WRITING RULES FOR THIS FILE - these are the reason the window once
+REM  flashed and vanished on double-click. Keep them when editing:
+REM    - a literal open or close parenthesis inside an if/for BLOCK body
+REM      closes the block early and turns the rest of the line into stray
+REM      tokens. Never put unescaped parentheses inside a block body.
+REM    - a label on the main flow must never end in "exit /b", which kills
+REM      the whole script. Hand over with goto instead. "exit /b" is only
+REM      correct inside a called subroutine.
+REM    - every terminating path must end in pause or timeout, never a bare
+REM      close, or the window disappears before the message can be read.
+REM    - never place a command that might not exist on the left of a pipe.
+REM      cmd aborts the whole script with exit code 255 instead of reporting
+REM      an error, and it does so even inside a called subroutine. Write the
+REM      output to a file first, then chain only always-present commands.
 REM ===========================================================================
 
 set "PORT_CANDIDATES=8000 8001 8080 8888 9000"
-set "RESUME_FLAG=__after_python_install__"
 set "VENV_DIR=%~dp0venv"
 set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
-REM  Python installer is served from a central network share. We copy it to a
-REM  local user directory first, then run the silent install from there.
-set "PY_INSTALLER=K:\Software\Python\python-3.12.6-amd64.exe"
-set "LOCAL_DIR=%USERPROFILE%\python_install"
-set "LOCAL_PATH=%LOCAL_DIR%\python-3.12.6-amd64.exe"
+set "MIN_MAJOR=3"
+set "MIN_MINOR=12"
 
-if /i "%~1"=="%RESUME_FLAG%" goto :locate_python
+REM  Installer sources, tried in this order.
+set "SHARE_INSTALLER=K:\Software\Python\python-3.12.6-amd64.exe"
+set "WEB_INSTALLER_URL=https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe"
+set "LOCAL_DIR=%USERPROFILE%\python_install"
+set "LOCAL_PATH=%LOCAL_DIR%\python-3.12.10-amd64.exe"
+REM  Anything smaller than this is an error page, not an installer.
+set "MIN_INSTALLER_BYTES=1000000"
+REM  A per-user install drops py.exe here. The running cmd session does not
+REM  see the PATH change, so we prepend this folder by hand after installing.
+set "LAUNCHER_DIR=%LOCALAPPDATA%\Programs\Python\Launcher"
 
 echo.
 echo ==== Dossier_Management bootstrap ====
 echo.
 
 REM ---------------------------------------------------------------------------
-REM 1. Locate a Python interpreter. Preference order:
-REM       a) python\ inside the project folder - the fully self-contained case
-REM       b) a user-level Python 3.12 install, e.g. one left behind by the
-REM          interactive installer wizard
-REM       c) nothing found -> copy from the network share (K:\Software\Python)
-REM          into a local user dir, then install silently; if that is blocked,
-REM          fall back to the interactive installer wizard
+REM 1. Locate a suitable interpreter through the py launcher
 REM ---------------------------------------------------------------------------
 
 :locate_python
-echo [1/3] Looking for Python ...
-set "BASE_PY="
-call :scan_python_paths
-if defined BASE_PY goto :python_found
+echo [1/3] Looking for a Python interpreter ...
+set "PYARG="
+set "PYVER="
+call :probe_py
+if defined PYARG goto :python_found
 goto :python_missing
 
-:scan_python_paths
-REM Returns BASE_PY when a usable interpreter is found. Uses exit /b instead of
-REM goto so the caller keeps control - jumping straight to a label from inside
-REM a called subroutine leaves cmd's call stack dirty and replays the script.
-if exist "%~dp0python\python.exe" (
-    set "BASE_PY=%~dp0python\python.exe"
-    exit /b 0
-)
-for /d %%D in ("%LOCALAPPDATA%\Programs\Python\Python312*") do (
-    if exist "%%~D\python.exe" (
-        set "BASE_PY=%%~D\python.exe"
-        exit /b 0
-    )
-)
-for /d %%D in ("%ProgramFiles%\Python312*") do (
-    if exist "%%~D\python.exe" (
-        set "BASE_PY=%%~D\python.exe"
-        exit /b 0
-    )
-)
-for /d %%D in ("C:\Python312*") do (
-    if exist "%%~D\python.exe" (
-        set "BASE_PY=%%~D\python.exe"
-        exit /b 0
-    )
-)
-exit /b 1
-
 :python_found
-echo [i] Using interpreter: %BASE_PY%
-"%BASE_PY%" --version
-goto :setup_venv
+echo [i] Using the py launcher - Python %PYVER%
+py %PYARG% --version
+if not errorlevel 1 goto :setup_venv
+REM  The launcher can still list an interpreter whose files were deleted, so
+REM  a registered version is not proof that it starts. Fall back to a fresh
+REM  install, but only once - otherwise a stale entry would loop forever.
+if defined STALE_TRIED goto :install_failed
+set "STALE_TRIED=1"
+echo [!] Python %PYVER% is registered but will not start.
+echo     Installing a fresh copy instead.
+goto :python_missing
+
+REM ---------------------------------------------------------------------------
+REM 1b. Nothing usable - obtain an installer and install it
+REM ---------------------------------------------------------------------------
 
 :python_missing
-echo [!] No usable Python interpreter found yet.
+echo [!] The py launcher found no interpreter at or above %MIN_MAJOR%.%MIN_MINOR%.
 echo.
-if not exist "%PY_INSTALLER%" goto :no_installer
-if defined SILENT_TRIED goto :interactive_install
-
-:try_silent_install_step
-set "SILENT_TRIED=1"
-echo [i] Trying a silent install from the network share K:\Software\Python ...
+call :fetch_installer
+if not exist "%LOCAL_PATH%" goto :install_failed
+call :check_installer_size
+if not defined INSTALLER_OK goto :install_failed
 call :run_silent_install
-if defined BASE_PY goto :python_found
-echo [!] Silent installation was blocked on this machine.
-echo     Log file, if any: %TEMP%\py_install.log
+if defined PYARG goto :python_found
+goto :install_failed
 
-:interactive_install
+:install_failed
 echo.
-echo ==========================================================================
-echo  The Python installer window will open now. Please finish it by hand:
+echo [!] Could not obtain a working Python interpreter on this machine.
+echo     Tried the py launcher, the network share and python.org.
 echo.
-echo    1. Tick "Add python.exe to PATH" at the bottom of the first screen
-echo    2. Leave everything else at its default
-echo    3. Press Install, wait for "Setup was successful", then Close
+echo     Next steps, easiest first:
+echo       1. ask IT to install Python %MIN_MAJOR%.%MIN_MINOR% or newer
+echo       2. copy the installer to %LOCAL_DIR% by hand, then run this again
 echo.
-echo  No administrator rights are needed. When it is done this window
-echo  continues automatically.
-echo ==========================================================================
-echo.
-pause
-echo [i] Opening the Python installer wizard from %LOCAL_PATH% ...
-start "" /wait "%LOCAL_PATH%"
-echo.
-echo [i] Looking for the interpreter you just installed ...
-set "BASE_PY="
-call :scan_python_paths
-if defined BASE_PY goto :python_found
-echo [!] Could not find the Python you installed.
-echo     Run start.bat again after closing this window, or copy Python into
-echo     the project's python\ folder manually.
-pause
-exit /b 1
-
-:run_silent_install
-REM Copy the installer from the central network share to a local user directory,
-REM then run the silent install from the local copy (validated approach).
-if not exist "%LOCAL_DIR%" mkdir "%LOCAL_DIR%"
-if exist "%PY_INSTALLER%" (
-    echo [i] Package found on the network share, copying to %LOCAL_PATH% ...
-    copy /Y "%PY_INSTALLER%" "%LOCAL_PATH%" >nul
-    if not exist "%LOCAL_PATH%" exit /b 1
-    echo [i] Installing ...
-    "%LOCAL_PATH%" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0 /log "%LOCAL_DIR%\install_log.txt"
-    if errorlevel 1 exit /b 1
-    echo [i] Install finished - check %LOCAL_DIR%\install_log.txt or run python --version to verify.
-    set "BASE_PY="
-    call :scan_python_paths
-    if defined BASE_PY exit /b 0
-    exit /b 1
-)
-echo [!] Did not find the package at %PY_INSTALLER%.
-echo     Please check the network connection / that the share is mapped.
-pause
-exit /b 1
-
-:no_installer
-echo [!] Did not find the package at %PY_INSTALLER%.
-echo     Please check the network connection / that the share is mapped.
 pause
 exit /b 1
 
 REM ---------------------------------------------------------------------------
-REM 2. Create the virtualenv (once) and install dependencies into it
+REM 2. Create the virtualenv once, then install dependencies into it
 REM ---------------------------------------------------------------------------
 
 :setup_venv
 echo.
-echo [2/3] Preparing virtual environment and installing dependencies ...
+echo [2/3] Preparing the virtual environment ...
 
-if exist "%VENV_PY%" (
-    echo [i] Existing virtualenv found at %VENV_DIR% - skipping creation
-    goto :deps_install
-)
-echo [i] Creating virtual environment in %VENV_DIR% ...
-"%BASE_PY%" -m venv "%VENV_DIR%"
-if errorlevel 1 (
-    echo.
-    echo [!] Failed to create the virtual environment.
-    echo     Check that Python 3.12 runs correctly: %BASE_PY%
-    pause
-    exit /b 1
-)
+if exist "%VENV_PY%" goto :deps_install
+echo [i] Creating it in %VENV_DIR% ...
+py %PYARG% -m venv "%VENV_DIR%"
+if not exist "%VENV_PY%" goto :venv_failed
 
 :deps_install
 echo [i] Installing dependencies from requirements.txt into the venv ...
-REM Network on the target machines is flaky but all dependencies do install
-REM fine once the connection holds, so retry the whole pip pass up to 10 times.
-REM pip also retries internally (--retries 5) and caches wheels, so each retry
-REM after a partial download gets faster.
+REM Network on the target machines is flaky, but every dependency does
+REM install fine once the connection holds, so retry the whole pip pass.
+REM pip also retries internally and caches wheels, so each retry after a
+REM partial download is faster than the one before.
 set "MAX_RETRY=10"
 set "ATTEMPT=0"
 :install_deps
 set /a ATTEMPT+=1
 echo [i] Installing dependencies - attempt %ATTEMPT% of %MAX_RETRY% ...
-"%VENV_PY%" -m pip install --retries 5 --timeout 60 -r "%~dp0requirements.txt"
+"%VENV_PY%" -m pip install --disable-pip-version-check --no-input --retries 5 --timeout 60 -r "%~dp0requirements.txt"
 if not errorlevel 1 goto :deps_done
-echo [!] Dependency installation failed on attempt %ATTEMPT% (network may be flaky).
+echo [!] Dependency installation failed on attempt %ATTEMPT%, the network may be flaky.
 if %ATTEMPT%==%MAX_RETRY% goto :deps_failed
 echo     Retrying in 5 seconds ...
 timeout /t 5 /nobreak >nul
 goto :install_deps
+:deps_done
+echo [i] Dependencies are ready.
+goto :start_server
+
 :deps_failed
 echo.
 echo [!] Dependency installation failed after %MAX_RETRY% attempts.
-echo     Check that pypi.org is reachable, then run start.bat again.
-echo     The server has NOT been started.
+echo     Check that pypi.org is reachable from this machine, then run this
+echo     script again. The server has NOT been started.
 pause
 exit /b 1
-:deps_done
+
+:venv_failed
+echo.
+echo [!] Failed to create the virtual environment with Python %PYVER%.
+echo     Delete the venv folder and run this script again.
+pause
+exit /b 1
 
 REM ---------------------------------------------------------------------------
-REM 3. Start the server (using the venv interpreter) and open the UI
+REM 3. Start the server with the venv interpreter and open the UI
 REM ---------------------------------------------------------------------------
 
 :start_server
 echo.
 echo [3/3] Finding a free port and starting the web UI ...
 
-REM Pick the first port from the candidate list that is not currently in use.
-REM netstat lists active connections; we flag a port as occupied if it shows
-REM up in any line. If netstat is unavailable the check is skipped and the
-REM first candidate (8000) is assumed free.
+REM Pick the first candidate port that is not currently in use. netstat lists
+REM active connections, so a port counts as busy if it shows up in any line.
+REM If netstat is unavailable the check silently passes and 8000 is assumed
+REM free, which the port scan below will then confirm or reject.
 set "PORT="
 for %%P in (%PORT_CANDIDATES%) do (
     if not defined PORT (
@@ -236,12 +190,7 @@ for %%P in (%PORT_CANDIDATES%) do (
         if errorlevel 1 set "PORT=%%P"
     )
 )
-if not defined PORT (
-    echo [!] Could not find a free port among: %PORT_CANDIDATES%
-    echo     Free one manually, then run start.bat again.
-    pause
-    exit /b 1
-)
+if not defined PORT goto :no_port
 
 echo [i] Using port %PORT% ...
 start "Dossier_Management Server" cmd /c ""%VENV_PY%" "%~dp0main.py" serve --port %PORT%"
@@ -249,8 +198,130 @@ echo [i] Waiting for the server to come up ...
 timeout /t 5 /nobreak >nul
 start "" http://localhost:%PORT%
 echo.
-echo [ok] Done. The UI should now be open in your browser (http://localhost:%PORT%).
+echo [ok] Done. The UI should now be open in your browser:
+echo      http://localhost:%PORT%
+echo.
 echo      The server runs in the "Dossier_Management Server" window.
 echo      Close that window to stop it.
-echo
+echo.
 timeout /t 5
+exit /b 0
+
+:no_port
+echo [!] Could not find a free port among: %PORT_CANDIDATES%
+echo     Free one manually, then run this script again.
+pause
+exit /b 1
+
+REM ---------------------------------------------------------------------------
+REM Subroutines - never reached by falling through, only via call
+REM ---------------------------------------------------------------------------
+
+REM  :probe_py - sets PYARG, for example "-3.13", and PYVER, for example
+REM  "3.13", when a registered interpreter at or above the minimum is usable.
+REM  Entries whose path contains WindowsApps are dropped on purpose: that is
+REM  the Store build, which hides behind a very long path and has unreliable
+REM  venv support. If py is missing entirely, it writes to stderr, the filter
+REM  below discards everything and PYARG stays empty.
+:probe_py
+set "PYLIST=%TEMP%\dm_py_list.txt"
+set "PYLIST_OK=%TEMP%\dm_py_ok.txt"
+REM  The scan is split into two steps on purpose. Putting a command that may
+REM  not exist - py, on a machine that never had Python - on the left of a
+REM  pipe makes cmd abort the entire script with exit code 255 instead of
+REM  reporting an ordinary error, and it does so even inside a subroutine.
+REM  So the raw listing goes to a file first, and only commands that always
+REM  exist are ever chained together after that.
+py -0p > "%PYLIST%" 2>nul
+if not exist "%PYLIST%" goto :probe_py_done
+findstr /r /c:"-V:" "%PYLIST%" | findstr /v /i "WindowsApps" > "%PYLIST_OK%" 2>nul
+if not exist "%PYLIST_OK%" goto :probe_py_done
+for /f "usebackq tokens=1" %%A in ("%PYLIST_OK%") do call :consider_py "%%A"
+:probe_py_done
+del "%PYLIST%" >nul 2>&1
+del "%PYLIST_OK%" >nul 2>&1
+exit /b
+
+REM  :consider_py - keeps the first qualifying entry. py lists interpreters
+REM  newest first, so the first match is also the highest version available.
+REM  Third-party builds carry tags such as Vendor/CPython3.12.14; the strict
+REM  two-number check below rejects those, keeping only plain X.Y tags which
+REM  are what the official installer registers.
+:consider_py
+if defined PYARG exit /b
+set "TAG=%~1"
+if not "%TAG:~0,3%"=="-V:" exit /b
+set "TAG=%TAG:~3%"
+echo(%TAG%|findstr /r /c:"^[0-9][0-9]*\.[0-9][0-9]*$" >nul
+if errorlevel 1 exit /b
+for /f "tokens=1,2 delims=." %%a in ("%TAG%") do (set "CUR_MAJ=%%a" & set "CUR_MIN=%%b")
+REM  Guard both halves before comparing. If either variable were empty the
+REM  comparison line would collapse to something like "if 3 LSS  exit /b";
+REM  cmd would then read the command name as the right hand operand and try
+REM  to run the command name itself as a program, which surfaces as a stray
+REM  token error instead of a useful message. Hence the two guards.
+if not defined CUR_MAJ exit /b
+if not defined CUR_MIN exit /b
+if %CUR_MAJ% LSS %MIN_MAJOR% exit /b
+if %CUR_MAJ% GTR %MIN_MAJOR% goto :consider_accept
+if %CUR_MIN% LSS %MIN_MINOR% exit /b
+:consider_accept
+set "PYARG=-%TAG%"
+set "PYVER=%TAG%"
+exit /b
+
+REM  :fetch_installer - puts the installer at LOCAL_PATH. The network share
+REM  is tried first because it needs no internet access; a direct download
+REM  from python.org is the fallback. curl.exe ships with Windows 10 1803 and
+REM  later, certutil is the older fallback. Both are called by full path so a
+REM  curl or tar from Git or MSYS on the PATH can never shadow them.
+:fetch_installer
+if not exist "%LOCAL_DIR%" mkdir "%LOCAL_DIR%"
+
+echo [i] Looking for the installer on the network share ...
+if not exist "%SHARE_INSTALLER%" goto :share_absent
+copy /Y "%SHARE_INSTALLER%" "%LOCAL_PATH%" >nul 2>&1
+if exist "%LOCAL_PATH%" goto :fetch_done
+echo [!] The installer is on the share but could not be copied - access denied?
+goto :fetch_web
+
+:share_absent
+echo [i] The share is not reachable from this machine, skipping it.
+
+:fetch_web
+echo [i] Downloading the installer from python.org ...
+echo     %WEB_INSTALLER_URL%
+if exist "%SystemRoot%\System32\curl.exe" goto :fetch_curl
+goto :fetch_certutil
+:fetch_curl
+"%SystemRoot%\System32\curl.exe" -L --fail --retry 3 --retry-delay 3 --connect-timeout 20 --max-time 600 -o "%LOCAL_PATH%" "%WEB_INSTALLER_URL%"
+if exist "%LOCAL_PATH%" goto :fetch_done
+echo [!] curl did not succeed, trying certutil ...
+:fetch_certutil
+certutil -urlcache -split -f "%WEB_INSTALLER_URL%" "%LOCAL_PATH%" >nul 2>&1
+:fetch_done
+exit /b
+
+REM  :check_installer_size - sets INSTALLER_OK when the downloaded file is
+REM  big enough to be a real installer rather than a redirect or error page.
+:check_installer_size
+set "INSTALLER_OK="
+set "FSIZE=0"
+for %%F in ("%LOCAL_PATH%") do set "FSIZE=%%~zF"
+if %FSIZE% LSS %MIN_INSTALLER_BYTES% exit /b
+set "INSTALLER_OK=1"
+exit /b
+
+REM  :run_silent_install - installs from LOCAL_PATH, then re-probes the
+REM  launcher. InstallAllUsers=0 needs no administrator rights. PrependPath=0
+REM  leaves the user PATH untouched; instead we prepend the launcher folder
+REM  for this session only, so the re-probe can find py right away.
+:run_silent_install
+echo [i] Installing Python silently, this can take a minute ...
+"%LOCAL_PATH%" /quiet InstallAllUsers=0 PrependPath=0 Include_test=0 /log "%LOCAL_DIR%\install_log.txt"
+echo [i] Installer finished, re-checking the py launcher ...
+set "PATH=%LAUNCHER_DIR%;%PATH%"
+set "PYARG="
+set "PYVER="
+call :probe_py
+exit /b
