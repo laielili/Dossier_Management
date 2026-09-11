@@ -38,6 +38,13 @@ logs/
 data/
 data/**/*.pdf
 
+# ---------- Portable Python runtime (mode A of Dossier_Management.bat) ----------
+# Vendored CPython + pre-installed dependencies, roughly 250 MB. It is shipped
+# by copying the project folder (or zipping it), never through git - see the
+# header of Dossier_Management.bat for how to build it.
+#python/
+#installer/
+
 # ---------- IDE ----------
 .vscode/
 .idea/
@@ -76,6 +83,7 @@ search_paths.txt
 demo/
 prompt/beta/
 task_briefs/
+docs/
 
 #Local saved search_paths
 config_overrides.json
