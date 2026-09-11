@@ -42,7 +42,7 @@ data/**/*.pdf
 # Vendored CPython + pre-installed dependencies, roughly 250 MB. It is shipped
 # by copying the project folder (or zipping it), never through git - see the
 # header of Dossier_Management.bat for how to build it.
-#python/
+python/
 #installer/
 
 # ---------- IDE ----------
