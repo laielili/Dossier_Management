@@ -372,8 +372,8 @@ class DeckRenderer:
             self.layout.first_page_only_regions if page.is_continuation else set()
         )
 
-        # Top-banner divider: separates the stacked title/formula-ref in the
-        # banner's left zone from the pinned Performance Summary band on the right.
+        # Top-banner divider: separates the stacked title/formula-ref (left)
+        # from the right-aligned `description` line.
         div = self.chrome.get("top_banner_divider", {})
         if div.get("enabled") and "top_banner" in regions and "top_banner" not in skip:
             tb = regions["top_banner"]

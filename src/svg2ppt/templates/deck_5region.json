@@ -1,6 +1,6 @@
 {
-  "name": "deck_5region",
-  "description": "L'Oréal synthesis deck layout derived from prompt/skincare/system_skincare.md. Canvas 1000x562.5 (16:9).",
+  "name": "deck_4region",
+  "description": "L'Oreal synthesis deck layout derived from prompt/system.md (SUMMARIZE section). Canvas 1000x562.5 (16:9). Regions: top_banner (project identity + Performance Summary card in its right zone, repeated on every page) / left_column (all project metadata) / core_content (evidence area, same geometry on every page). The standalone summary_band region was folded into the banner's right zone (summary_left_x aligned with the evidence area's left edge).",
   "canvas": {
     "width": 1000,
     "height": 562.5,
@@ -35,58 +35,54 @@
       "x": 0,
       "y": 0,
       "w": 1000,
-      "h": 70,
+      "h": 106,
       "title": null,
       "background": "#e8c580",
       "show_border": true,
-      "padding": [8, 12, 8, 12]
-    },
-    "meta_row": {
-      "x": 0,
-      "y": 70,
-      "w": 1000,
-      "h": 34,
-      "title": null,
-      "background": "#f5e6c6",
-      "show_border": true,
-      "padding": [6, 12, 6, 12]
+      "padding": [
+        8,
+        14,
+        8,
+        14
+      ],
+      "gap": 6,
+      "summary_left_x": 220
     },
     "left_column": {
       "x": 0,
-      "y": 104,
+      "y": 106,
       "w": 220,
-      "h": 458.5,
+      "h": 456.5,
       "title": "Project Details",
       "background": "#ffffff",
       "show_border": true,
-      "padding": [8, 10, 8, 10],
+      "padding": [
+        8,
+        10,
+        8,
+        10
+      ],
       "distribute": true,
       "flex": true,
-      "card_blank_lines": 4,
-      "line_budget": 4,
-      "top_pad_lines": 1
+      "card_blank_lines": 2,
+      "line_budget": 3,
+      "top_pad_lines": 0.5,
+      "gap": 6
     },
-    "middle_column": {
+    "core_content": {
       "x": 220,
-      "y": 104,
-      "w": 560,
-      "h": 458.5,
-      "title": "Measured Efficacy",
+      "y": 106,
+      "w": 780,
+      "h": 456.5,
+      "title": null,
       "background": "#ffffff",
       "show_border": true,
-      "padding": [8, 10, 8, 10]
-    },
-    "right_column": {
-      "x": 780,
-      "y": 104,
-      "w": 220,
-      "h": 458.5,
-      "title": "Other Info",
-      "background": "#ffffff",
-      "show_border": true,
-      "padding": [8, 10, 8, 10],
-      "anchor": 0.5,
-      "adaptive_anchor": true
+      "padding": [
+        8,
+        10,
+        6,
+        10
+      ]
     }
   },
   "chrome": {
@@ -109,7 +105,7 @@
       "font_size": 15,
       "font_color": "#c8860d",
       "font_weight": "bold",
-      "offset_y": 18
+      "offset_y": 12
     },
     "component_labels": {
       "enabled": true,
@@ -122,25 +118,24 @@
       "enabled": true,
       "color": "#d9a441",
       "stroke_width": 1,
-      "x_ratio": 0.56,
-      "y_top": 8,
-      "y_bottom": 62
+      "x_ratio": 0.212,
+      "y_top": 4,
+      "y_bottom": 102
     }
   },
   "routing": {
     "title": "top_banner",
     "formula-ref": "top_banner",
-    "description": "top_banner",
-    "meta": "meta_row",
+    "summary-block": "top_banner",
+    "meta": "left_column",
     "info-card": "left_column",
-    "efficacy-table": "middle_column",
-    "consumer-block": "middle_column",
-    "summary-block": "right_column",
-    "custom": "middle_column",
-    "efficacy-bar": "middle_column",
-    "consumer-bar": "middle_column",
-    "timeseries-line": "middle_column",
-    "region-bar": "middle_column"
+    "efficacy-table": "core_content",
+    "consumer-block": "core_content",
+    "custom": "core_content",
+    "efficacy-bar": "core_content",
+    "consumer-bar": "core_content",
+    "timeseries-line": "core_content",
+    "region-bar": "core_content"
   },
   "stacking": {
     "default_gap": 8,
@@ -148,8 +143,11 @@
     "max_pages": null
   },
   "pagination": {
-    "overflow_region": "middle_column",
-    "repeat_regions": ["top_banner", "meta_row", "left_column", "right_column"],
+    "overflow_region": "core_content",
+    "repeat_regions": [
+      "top_banner",
+      "left_column"
+    ],
     "continuation_label": "(continued)"
   }
 }

@@ -6,9 +6,22 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
-build/
 .venv/
 venv/
+
+# ---------- PyInstaller build tooling (source, must be committed) ----------
+# NOT a bare `build/`: that trailing-slash rule excludes the directory itself
+# and git cannot then re-include anything inside it, so the four entries below
+# would silently never match. `build/*` excludes the contents and keeps the
+# negations working.
+# Without these a fresh clone has no spec and no rebuild driver -- and that
+# failure is quiet, because PyInstaller happily emits an icon-less exe when
+# the icon file is absent.
+build/*
+!build/dossier.spec
+!build/rebuild.py
+!build/make_icon.py
+!build/app-icon.ico
 
 # ---------- Vendored html-to-pptx ----------
 # The `dist/` rule above would swallow the vendored converter bundle, which is

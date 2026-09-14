@@ -46,14 +46,10 @@ FONT_FLOOR = 0.15
 # this fraction of its natural footprint rather than drop components.
 AUTOFIT_FLOOR = 0.55
 
-# Tolerance for the balanced-flex 'does the last card still fit?' comparison.
-# Going a hair past the edge is structural, not an error: the layout spreads
-# the leftover height across the gaps, so the final card is *designed* to land
-# exactly on the column bottom, and float arithmetic puts it a few 1e-13 units
-# beyond it (measured worst case 2.274e-13 on the left column). Without this
-# tolerance the same input sometimes renders with a bogus 'Region ... overflows'
-# warning and sometimes not, purely from rounding noise.
-OVERFLOW_EPS = 1e-6
+# The `description` component is laid out horizontally inside the top banner:
+# it occupies this share of the banner content width, right-aligned, with the
+# chrome divider drawn at its left edge (1 - DESCRIPTION_REGION_RATIO).
+DESCRIPTION_REGION_RATIO = 0.44
 
 # ---------------------------------------------------------------------------
 # Build modes (core_content presentation strategies)
@@ -597,12 +593,18 @@ class LayoutEngine:
     def _component_size(self, comp: Component, target_width: float) -> tuple[float, float]:
         """Return (width, height) for a component filling ``target_width``.
 
-        A component with a ``label`` reserves an extra title line (rendered by
-        the renderer above its SVG) on top of its natural aspect height.
+        A ``description`` fills only the right share of the banner width
+        (``DESCRIPTION_REGION_RATIO``) and is placed beside the stacked
+        title/formula-ref. A component with a ``label`` reserves an extra title
+        line (rendered by the renderer above its SVG) on top of its natural
+        aspect height.
         """
         w, h = svg_natural_size(comp.svg)
         if w <= 0 or h <= 0:
             return target_width, 10.0
+        if comp.type == "description":
+            width = target_width * DESCRIPTION_REGION_RATIO
+            return width, width * (h / w)
         height = target_width * (h / w)
         if comp.label:
             height += self._label_height(1.0)
@@ -655,12 +657,13 @@ class LayoutEngine:
             # (the left zone, x < `summary_left_x`) and pins the Performance
             # Summary card to the right zone, filling that zone's full height
             # (x = template `summary_left_x`, flush with the evidence area).
-            # The pinned Performance Summary band is the only special case;
-            # every other component stacks top-down in the banner's left zone.
+            # No `description` component is placed here (removed per spec).
             if region_name == "top_banner":
                 sum_items = [it for it in items if it[0].type == "summary-block"]
                 other_items = [
-                    it for it in items if it[0].type != "summary-block"
+                    it
+                    for it in items
+                    if it[0].type not in ("description", "summary-block")
                 ]
                 placed, leftover = self._fit_items(region, other_items, gap)
                 sum_w = region.inner_x + region.inner_w - self.banner_summary_x
@@ -1083,11 +1086,7 @@ class LayoutEngine:
         for i, d in enumerate(data):
             h = heights[i]
             gap_before = (gap + extra) if placed else 0.0
-            if (
-                placed
-                and y + gap_before + h
-                > region.content_y + region.content_h + OVERFLOW_EPS
-            ):
+            if placed and y + gap_before + h > region.content_y + region.content_h:
                 if is_repeat:
                     # Repeat regions must live entirely on page 1 (they are
                     # cloned onto every continuation page), so they cannot spill.

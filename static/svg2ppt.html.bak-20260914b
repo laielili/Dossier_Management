@@ -134,11 +134,11 @@
       <div class="output-mode-group" data-page-node-id="t0L84DDNop1iNiqQqP8vnm">
         <label class="checkbox-inline" title="Component groups with editable text overlays — text and components stay selectable in PowerPoint (experimental)" data-page-node-id="VDeZIugUCrcYrL6c0kuRyT">
           <input type="radio" name="output-mode" value="editable" checked data-page-node-id="wEHp89HpKJacMcZZFBt5if">
-          Editable
+          Editable (Beta)
         </label>
         <label class="checkbox-inline" title="Each slide is one full-page image — pixel-perfect, nothing editable" data-page-node-id="FvjFD9LHK0ccE8F9rhv5mm">
           <input type="radio" name="output-mode" value="classic" data-page-node-id="6XwHEOEtVRNNSJpCTICpyq">
-          Classic (grouped as one image)
+          Classic (image)
         </label>
       </div>
     </div>
@@ -253,6 +253,14 @@
             <div class="folder-input-group" data-page-node-id="sHK1xRumHqFHvnMWvVjOax">
               <input type="range" id="ov-title-font" min="0.5" max="2.0" value="1.0" step="0.1" data-page-node-id="nIG0So2XHQYI3LHbAERVog">
               <span class="param-status" id="ov-title-font-val" data-page-node-id="nebTQpK9GF80qGRVAX54s5">1.0×</span>
+            </div>
+          </div>
+
+          <div class="form-row" data-page-node-id="NgIpS7u8HwkvH3LzA7uIs5">
+            <label for="ov-meta-font" data-page-node-id="HZ8NsTNv1bJhFwzNDpvSk2">Banner text</label>
+            <div class="folder-input-group" data-page-node-id="FnFTDCQDzKaUXZoPKfZLnD">
+              <input type="range" id="ov-meta-font" min="0.5" max="2.0" value="1.0" step="0.1" data-page-node-id="MAYFURkDYqsABKXPGOhMhd">
+              <span class="param-status" id="ov-meta-font-val" data-page-node-id="uKCDlaGoXmsT5g3X1N6bPc">1.0×</span>
             </div>
           </div>
 

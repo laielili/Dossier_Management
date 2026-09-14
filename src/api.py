@@ -15,8 +15,6 @@ Endpoints:
   GET  /queries          — Read the unified query lexicon from queries/query.txt
   POST /queries/save     — Save the unified query lexicon to queries/query.txt
   POST /reset            — Reset project (index + screenshots only)
-  POST /clear            — Full wipe of past runs: Dossier_condensed contents +
-                           derived state (index + screenshots)
   GET  /activity         — Incremental activity feed for the frontend log
   GET  /config/pptx-output  — Read the PPTX output folder (default: Downloads)
     POST /config/pptx-output  — Save the PPTX output folder
@@ -29,7 +27,6 @@ Endpoints:
 import calendar
 import os
 import re
-import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -42,6 +39,7 @@ from pydantic import BaseModel
 from .config import (
     INDEX_DIR,
     PROJECT_ROOT,
+    STATIC_DIR,
     REPORT_TYPES,
     RETRIEVED_DIR,
     SCREENSHOTS_DIR,
@@ -84,11 +82,9 @@ from .svg2ppt.api import router as svg2ppt_router
 
 logger = get_logger("api")
 
-
 def _is_dossier_ext(name: str) -> bool:
     """True for the document extensions the pipeline accepts."""
     return Path(name).suffix.lower() in (".pdf", ".pptx", ".docx")
-
 
 app = FastAPI(title="Dossier_Management Document Pipeline", version="2.0")
 
@@ -99,7 +95,7 @@ app.include_router(svg2ppt_router)
 # Serve static files (CSS, JS, etc.)
 app.mount(
     "/static",
-    StaticFiles(directory=str(PROJECT_ROOT / "static")),
+    StaticFiles(directory=str(STATIC_DIR)),
     name="static",
 )
 # ---------------------------------------------------------------------------
@@ -112,25 +108,20 @@ class PackageRequest(BaseModel):
     project_owner: str = ""  # name of the project owner, shown on the PDF cover
     target_formula: str = ""  # final target formula; baked into the PDF cover
 
-
 class RunRequest(BaseModel):
     project_id: str = "default"
     top_n: Optional[int] = None  # cap of pages PER report type; -1 = All (no cap); None = config default
     project_owner: str = ""  # name of the project owner, shown on the PDF cover
     target_formula: str = ""  # final target formula; baked into the PDF cover
 
-
 class ScanRequest(BaseModel):
     project_name: str  # folder name under PROJECT_ROOT to scan for dossiers
-
 
 class QueriesSaveRequest(BaseModel):
     queries: dict[str, str]
 
-
 class PptxOutputRequest(BaseModel):
     path: str  # absolute folder where generated .pptx files are written
-
 
 class ClassifyConfirmRequest(BaseModel):
     decisions: list[dict] = []   # [{"filename": ..., "report_type": ...}]
@@ -142,10 +133,8 @@ class ClassifyConfirmRequest(BaseModel):
 class ClassifyProfileSaveRequest(BaseModel):
     profiles: dict[str, str]
 
-
 class SearchPathRequest(BaseModel):
     path: str  # absolute folder to search inside (saved as a history entry)
-
 
 class SearchRequest(BaseModel):
     """Search a target folder (recursively) for dossier files.
@@ -161,7 +150,6 @@ class SearchRequest(BaseModel):
     modified_enabled: bool = False
     modified_years: int = 1
     modified_months: int = 0
-
 
 class RetrieveStartRequest(BaseModel):
     """Kick off preprocessing for a set of selected files.
@@ -180,14 +168,12 @@ class RetrieveStartRequest(BaseModel):
 
 _pipeline: DossierPipeline | None = None
 
-
 def _get_pipeline(project_id: str = "default") -> DossierPipeline:
     global _pipeline
     if _pipeline is None or _pipeline.project_id != project_id:
         _pipeline = DossierPipeline(project_id)
         _pipeline.init()
     return _pipeline
-
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -196,21 +182,18 @@ def _get_pipeline(project_id: str = "default") -> DossierPipeline:
 @app.get("/", response_class=HTMLResponse)
 async def index():
     """Serve the frontend UI (Dossier Search — the new homepage)."""
-    index_path = PROJECT_ROOT / "static" / "search.html"
+    index_path = STATIC_DIR / "search.html"
     if index_path.exists():
         return HTMLResponse(index_path.read_text(encoding="utf-8"))
     return HTMLResponse("<h2>Frontend not found. Place search.html in static/</h2>")
 
-
 @app.get("/FileListener", response_class=HTMLResponse)
 async def file_listener():
     """Serve the original pipeline UI (Listen Folder + Run Full Pipeline), branded File Listener."""
-    page = PROJECT_ROOT / "static" / "file_listener.html"
+    page = STATIC_DIR / "file_listener.html"
     if page.exists():
         return HTMLResponse(page.read_text(encoding="utf-8"))
     return HTMLResponse("<h2>file_listener.html not found in static/</h2>", status_code=404)
-
-
 
 @app.get("/config/params")
 async def get_config_params():
@@ -234,11 +217,6 @@ async def get_config_params():
         "veto_terms": list_veto_terms(),
     }
 
-
-
-
-
-
 @app.get("/config/search-paths")
 async def get_search_paths_config():
     """Return the saved search target paths (history, most-recent first).
@@ -253,7 +231,6 @@ async def get_search_paths_config():
         "active": paths[0] if paths else "",
     }
 
-
 @app.post("/config/search-paths")
 async def set_search_path_config(req: SearchPathRequest):
     """Persist a search target path to search_paths.txt (history)."""
@@ -261,7 +238,6 @@ async def set_search_path_config(req: SearchPathRequest):
         raise HTTPException(400, "path is required")
     set_search_path(req.path.strip())
     return {"ok": True, "path": req.path.strip()}
-
 
 @app.delete("/config/search-paths")
 async def delete_search_path_config(path: str = ""):
@@ -277,7 +253,6 @@ async def delete_search_path_config(path: str = ""):
         "paths": get_search_paths(),
     }
 
-
 # --- Deck output path bookmarks (svg2ppt saved-destination history) ---
 @app.get("/config/deck-output-paths")
 async def get_deck_output_paths_config():
@@ -288,7 +263,6 @@ async def get_deck_output_paths_config():
     """
     return {"ok": True, "paths": get_deck_output_paths(), "active": get_pptx_output_dir()}
 
-
 @app.post("/config/deck-output-paths")
 async def set_deck_output_path_config(req: SearchPathRequest):
     """Persist a deck-output folder bookmark."""
@@ -296,7 +270,6 @@ async def set_deck_output_path_config(req: SearchPathRequest):
         raise HTTPException(400, "path is required")
     add_deck_output_path(req.path.strip())
     return {"ok": True, "path": req.path.strip()}
-
 
 @app.delete("/config/deck-output-paths")
 async def delete_deck_output_path_config(path: str = ""):
@@ -306,7 +279,6 @@ async def delete_deck_output_path_config(path: str = ""):
     if not delete_deck_output_path(path.strip()):
         raise HTTPException(404, "path not found in saved list")
     return {"ok": True, "removed": path.strip(), "paths": get_deck_output_paths()}
-
 
 @app.get("/browse-folders")
 async def browse_folders(path: str = ""):
@@ -351,7 +323,6 @@ async def browse_folders(path: str = ""):
         "dirs": dirs,
     }
 
-
 @app.post("/project/scan")
 async def scan_project(req: ScanRequest):
     """Scan a project folder for dossier files.
@@ -394,7 +365,6 @@ async def scan_project(req: ScanRequest):
         "count": len(files),
     }
 
-
 @app.post("/ingest")
 async def ingest(project_id: str = "default"):
     """Run ingest: parse all PDFs in PROJECT_ROOT/<project_id>/{CLINS,FE,CE}/ and build the index."""
@@ -410,7 +380,6 @@ async def ingest(project_id: str = "default"):
     except Exception as e:
         logger.exception("Ingest failed")
         raise HTTPException(500, str(e))
-
 
 @app.post("/package")
 async def package(req: PackageRequest):
@@ -437,7 +406,6 @@ async def package(req: PackageRequest):
     except Exception as e:
         logger.exception("Package failed")
         raise HTTPException(500, str(e))
-
 
 @app.post("/run")
 async def run_pipeline(req: RunRequest):
@@ -471,7 +439,6 @@ async def run_pipeline(req: RunRequest):
         logger.exception("Run pipeline failed")
         raise HTTPException(500, str(e))
 
-
 @app.get("/status")
 async def status(project_id: str = "default"):
     """Get retriever / index status."""
@@ -482,7 +449,6 @@ async def status(project_id: str = "default"):
         "retriever_mode": "lexical",
         "pages_indexed": pipeline.total_pages,
     }
-
 
 @app.get("/download/{project_id}")
 async def download(project_id: str):
@@ -496,87 +462,12 @@ async def download(project_id: str):
         404, "Output is now a folder; see <PROJECT_ROOT>/Dossier_condensed/<project_id>/"
     )
 
-
 @app.post("/reset")
 async def reset(project_id: str = "default"):
     """Reset project: clear index and screenshots."""
     pipeline = _get_pipeline(project_id)
     pipeline.reset()
     return {"ok": True, "project_id": project_id}
-
-
-# NOTE: /clear wipes the Dossier_condensed export folder plus derived state
-# (index + screenshots). The listen-folder project-subfolder deletion was retired
-# with the listen-folder configuration feature.
-
-@app.post("/clear")
-async def clear_residual():
-    """Permanently delete the residual left by past processing runs.
-
-    Scope (IRREVERSIBLE — the frontend requires an explicit confirm first):
-      1) all contents of <PROJECT_ROOT>/Dossier_condensed/ (the exported PDFs);
-      2) all *derived* state from previous runs — the page-text index
-         (index_projects/) and the screenshot cache (screenshots/).
-
-    The Dossier_condensed folder itself (not its contents) is kept so the next
-    run can export into it immediately. Project paths are intentionally NEVER
-    written to the server log.
-    """
-    base_p = PROJECT_ROOT
-
-    removed: list[str] = []
-    errors: list[dict] = []
-
-
-
-    # 1) Everything inside /Dossier_condensed (keep the folder itself).
-    condensed = base_p / CONDENSED_DIR_NAME
-    if condensed.exists():
-        for item in sorted(condensed.iterdir()):
-            try:
-                if item.is_file() or item.is_symlink():
-                    item.unlink()
-                else:
-                    shutil.rmtree(item)
-                removed.append(str(item))
-            except OSError as e:
-                logger.warning(f"clear: could not remove {item}: {e}")
-                errors.append({"path": str(item), "error": str(e)})
-
-    # 2) Derived state (global, lives under PROJECT_ROOT, keyed by project_id).
-    #    Wipe it wholesale — it is cheap to regenerate and is exactly the
-    #    "residual of past runs" this button targets.
-    #    (a) page-text index
-    if INDEX_DIR.exists():
-        for f in INDEX_DIR.glob("*.json"):
-            try:
-                f.unlink()
-                removed.append(str(f))
-            except OSError as e:
-                logger.warning(f"clear: could not delete index {f}: {e}")
-                errors.append({"path": str(f), "error": str(e)})
-    #    (b) screenshot cache
-    if SCREENSHOTS_DIR.exists():
-        for rt in REPORT_TYPES:
-            rt_dir = SCREENSHOTS_DIR / rt
-            if not rt_dir.exists():
-                continue
-            for item in list(rt_dir.iterdir()):
-                try:
-                    if item.is_file() or item.is_symlink():
-                        item.unlink()
-                    else:
-                        shutil.rmtree(item)
-                    removed.append(str(item))
-                except OSError as e:
-                    logger.warning(f"clear: could not remove {item}: {e}")
-                    errors.append({"path": str(item), "error": str(e)})
-    logger.info(
-        f"Clear residual: removed {len(removed)} item(s), "
-        f"{len(errors)} error(s)"
-    )
-    return {"ok": True, "removed": removed, "errors": errors}
-
 
 # ---------------------------------------------------------------------------
 # Auto-classification endpoints (no upload — dossiers are read from the
@@ -609,7 +500,6 @@ async def classify_inbox(project_id: str = "default"):
         logger.exception("Classification failed")
         raise HTTPException(500, str(e))
 
-
 @app.post("/classify/confirm")
 async def confirm_classification(req: ClassifyConfirmRequest, project_id: str = "default"):
     """Apply final type decisions, moving files into <project>/{type}/.
@@ -632,7 +522,6 @@ async def confirm_classification(req: ClassifyConfirmRequest, project_id: str = 
         logger.exception("Confirm classification failed")
         raise HTTPException(500, str(e))
 
-
 @app.get("/classify/profiles")
 async def get_classify_profiles():
     """Read current type profiles from classify/*.txt."""
@@ -642,7 +531,6 @@ async def get_classify_profiles():
     except Exception as e:
         logger.exception("Failed to load classify profiles")
         raise HTTPException(500, str(e))
-
 
 @app.post("/classify/profiles/save")
 async def save_classify_profiles_endpoint(req: ClassifyProfileSaveRequest):
@@ -666,7 +554,6 @@ async def save_classify_profiles_endpoint(req: ClassifyProfileSaveRequest):
         logger.exception("Failed to save classify profiles")
         raise HTTPException(500, str(e))
 
-
 # ---------------------------------------------------------------------------
 # Query management endpoints
 # ---------------------------------------------------------------------------
@@ -686,7 +573,6 @@ async def get_queries():
     except Exception as e:
         logger.exception("Failed to load queries")
         raise HTTPException(500, str(e))
-
 
 @app.post("/queries/save")
 async def save_queries(req: QueriesSaveRequest):
@@ -713,13 +599,11 @@ async def save_queries(req: QueriesSaveRequest):
         logger.exception("Failed to save queries")
         raise HTTPException(500, str(e))
 
-
 # ---------------------------------------------------------------------------
 # Dossier retrieval — search a target folder, then preprocess selected files
 # ---------------------------------------------------------------------------
 
 SEARCH_EXTS = {".pdf", ".pptx", ".docx", ".xlsx"}
-
 
 def _cutoff_datetime(years: int, months: int) -> datetime:
     """A datetime ``years`` years + ``months`` months before now.
@@ -738,7 +622,6 @@ def _cutoff_datetime(years: int, months: int) -> datetime:
     last = calendar.monthrange(y, m)[1]
     d = min(now.day, last)
     return now.replace(year=y, month=m, day=d)
-
 
 @app.post("/search")
 async def search_files(req: SearchRequest):
@@ -794,7 +677,6 @@ async def search_files(req: SearchRequest):
     # The target path is user data — never write it to the server log.
     return {"ok": True, "count": len(files), "files": files}
 
-
 @app.post("/retrieve/start")
 async def retrieve_start_endpoint(req: RetrieveStartRequest):
     """Copy selected files into retrieved/<project_name>/ and start the
@@ -804,18 +686,15 @@ async def retrieve_start_endpoint(req: RetrieveStartRequest):
         raise HTTPException(400, out.get("detail", "could not start retrieval"))
     return out
 
-
 @app.get("/retrieve/status")
 async def retrieve_status_endpoint():
     """Progress of the retrieval preprocessing run (stage tracker data)."""
     return {"ok": True, **retrieve_status()}
 
-
 @app.get("/activity")
 async def activity(since: int = 0):
     """Incremental activity feed for the frontend log (id > since)."""
     return {"ok": True, **get_events(since)}
-
 
 @app.get("/config/pptx-output")
 async def get_pptx_output_config():
@@ -833,7 +712,6 @@ async def get_pptx_output_config():
         "is_default": current == default,
         "exists": Path(current).is_dir(),
     }
-
 
 @app.post("/config/pptx-output")
 async def set_pptx_output_config(req: PptxOutputRequest):

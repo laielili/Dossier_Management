@@ -597,68 +597,6 @@ watchToggle.addEventListener("change", async () => {
 });
 
 // =================================================================
-// Clear residual (destructive — explicit confirm required)
-// =================================================================
-
-const clearBtn = $("#btn-clear");
-
-function showClearModal() {
-  const base = getListenFolder().replace(/[\\/]+$/, "");
-  const listenPath = base || "<Listen Folder>";
-  const condensed = base
-    ? base + "\\Dossier_condensed\\"
-    : "<Listen Folder>\\Dossier_condensed\\";
-  $("#clear-paths").textContent =
-    `Listen Folder: ${listenPath}\nDossier_condensed: ${condensed}`;
-  $("#clear-warning").textContent = base
-    ? "If the Listen Folder is OneDrive-synced, this deletion propagates to the cloud and cannot be undone."
-    : "Set the Listen Folder first — it is required to know what to clear.";
-  $("#clear-modal").classList.remove("hidden");
-}
-
-function hideClearModal() {
-  $("#clear-modal").classList.add("hidden");
-}
-
-clearBtn.addEventListener("click", () => {
-  if (!getListenFolder()) {
-    log("Set the Listen Folder before clearing.", "warn");
-    return;
-  }
-  showClearModal();
-});
-
-$("#clear-cancel").addEventListener("click", hideClearModal);
-$("#clear-modal-close").addEventListener("click", hideClearModal);
-$("#clear-modal-backdrop").addEventListener("click", hideClearModal);
-
-$("#clear-confirm").addEventListener("click", async (e) => {
-  const btn = e.currentTarget;
-  setButtonLoading(btn, true);
-  try {
-    const res = await fetch("/clear", { method: "POST" });
-    const data = await res.json();
-    if (data.ok) {
-      const n = (data.removed || []).length;
-      const errs = (data.errors || []).length;
-      log(
-        `Cleared ${n} item(s) from past runs${errs ? ` (${errs} error(s))` : ""}.`,
-        errs ? "warn" : "success"
-      );
-      (data.errors || []).forEach((er) =>
-        log(`  ✗ ${er.path}: ${er.error}`, "error")
-      );
-    } else {
-      log("Clear failed: " + (data.detail || "unknown error"), "error");
-    }
-  } catch (err) {
-    log("Clear error: " + err.message, "error");
-  }
-  setButtonLoading(btn, false);
-  hideClearModal();
-});
-
-// =================================================================
 // Startup
 // =================================================================
 

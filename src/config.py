@@ -1,35 +1,74 @@
 """
 Dossier_Management — Pipeline Configuration
+
+Resolves the two runtime roots (ASSET_ROOT / APP_ROOT) and holds every
+tunable the pipeline reads.
 """
 
 import json
 import os
+import shutil
+import sys
 from pathlib import Path
 
-# --- Project root ---
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# --- Root resolution: source checkout vs frozen bundle ------------------
+# Packaged with PyInstaller the app spans two kinds of files, and they must
+# NOT share one root:
+#
+#   ASSET_ROOT  read-only resources baked into the bundle -- static/ (incl.
+#               the study_region badges), classify/*.txt, queries/*.txt and
+#               the svg2ppt templates. Frozen: <bundle>/_internal, i.e.
+#               sys._MEIPASS.
+#   APP_ROOT    everything written at run time -- data/, index_projects/,
+#               screenshots/, output/, logs/, retrieved/, Dossier_condensed/,
+#               the per-project folders and the user-editable config files.
+#               Frozen: the folder holding the .exe, which keeps the build
+#               portable -- copy the folder and the state travels with it.
+#
+# In a source checkout both roots are the repository root, so the development
+# flow is unchanged.
+_FROZEN = bool(getattr(sys, "frozen", False))
+
+if _FROZEN:
+    ASSET_ROOT = Path(
+        getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent)
+    ).resolve()
+    APP_ROOT = Path(sys.executable).resolve().parent
+else:
+    ASSET_ROOT = Path(__file__).resolve().parent.parent
+    APP_ROOT = ASSET_ROOT
+
+# Backwards-compatible alias. The pipeline historically used PROJECT_ROOT for
+# its writable working area, which is now APP_ROOT.
+PROJECT_ROOT = APP_ROOT
+
+# Read-only frontend + asset directory (static mount, the two HTML pages, the
+# svg2ppt badge PNGs).
+STATIC_DIR = ASSET_ROOT / "static"
 
 # --- Search target paths (Dossier retrieval feature) -------------------
 # Persisted to search_paths.txt at the project root (one absolute path per
 # line, most-recent first). This is a convenience history the search UI renders
 # as a re-loadable / deletable list of folders to look inside for dossiers. The
 # path is intentionally NOT written to logs.
-SEARCH_PATHS_FILE = PROJECT_ROOT / "search_paths.txt"
+SEARCH_PATHS_FILE = APP_ROOT / "search_paths.txt"
 
 # Folder that receives the files a user selects in the retrieval flow,
 # structured as retrieved/<project_name>/ (one subfolder per retrieval run).
 # Created on demand when a retrieval starts.
-RETRIEVED_DIR = PROJECT_ROOT / "retrieved"
+RETRIEVED_DIR = APP_ROOT / "retrieved"
 
 # --- Data & output directories ---
-DATA_DIR = PROJECT_ROOT / "data"
-INDEX_DIR = PROJECT_ROOT / "index_projects"   # lightweight page-text index (no vectors)
-SCREENSHOTS_DIR = PROJECT_ROOT / "screenshots"
-OUTPUT_DIR = PROJECT_ROOT / "output"
-LOG_DIR = PROJECT_ROOT / "logs"
-QUERIES_DIR = PROJECT_ROOT / "queries"
+DATA_DIR = APP_ROOT / "data"
+INDEX_DIR = APP_ROOT / "index_projects"   # lightweight page-text index (no vectors)
+SCREENSHOTS_DIR = APP_ROOT / "screenshots"
+OUTPUT_DIR = APP_ROOT / "output"
+LOG_DIR = APP_ROOT / "logs"
+# User-editable at run time (POST /queries/save, /classify/profiles/save), so
+# these two live under APP_ROOT; the bundled copies act as first-run defaults.
+QUERIES_DIR = APP_ROOT / "queries"
 CLASSIFY_DIR = DATA_DIR / "inbox"
-CLASSIFY_PROFILE_DIR = PROJECT_ROOT / "classify"
+CLASSIFY_PROFILE_DIR = APP_ROOT / "classify"
 
 # --- Report type subdirectories ---
 REPORT_TYPES = ["CLINS", "FE", "CE"]
@@ -82,12 +121,12 @@ def delete_search_path(path: str) -> bool:
 def project_data_dir(project_name: str) -> Path:
     """Per-project dossier working folder.
 
-    The project folder is <PROJECT_ROOT>/<project_name>/, and classified files
+    The project folder is <APP_ROOT>/<project_name>/, and classified files
     go into <project_name>/{CLINS,FE,CE}/ beneath it. The project name doubles
     as the pipeline ``project_id`` (index key + output PDF name), so this
     single mapping drives the whole per-project flow.
     """
-    return PROJECT_ROOT / project_name
+    return APP_ROOT / project_name
 
 # Friendly labels for the synthesis PDF annotation block (user-defined mapping:
 # CLINS = clinical signal, FE = sensory signal, CE = consumer evaluation signal).
@@ -148,7 +187,7 @@ VETO_SEED_TERMS = ["conclusion", "results", "p-value", "significance"]
 # --- User-tunable overrides (persisted to disk) --
 # The frontend writes pipeline parameters here (e.g. the PPTX output folder).
 # The noise-deletion policy itself is code-defined and not user-tunable.
-CONFIG_OVERRIDES_PATH = PROJECT_ROOT / "config_overrides.json"
+CONFIG_OVERRIDES_PATH = APP_ROOT / "config_overrides.json"
 
 
 def get_config_overrides() -> dict:
@@ -187,11 +226,27 @@ def default_pptx_output_dir() -> str:
     return str(downloads if downloads.exists() else home)
 
 
+def _path_is_reachable(p: Path) -> bool:
+    """True when ``p`` exists, or when at least its drive/anchor does.
+
+    A saved override can name a folder that only ever existed on the machine
+    where it was saved -- a different user profile, an unmounted network share,
+    a drive letter that is not present here. Such a path is treated as unset so
+    an export never fails on configuration carried over from another machine.
+    """
+    if p.exists():
+        return True
+    anchor = p.anchor   # "C:\\" on Windows, "/" on posix
+    return bool(anchor) and Path(anchor).exists()
+
+
 def get_pptx_output_dir() -> str:
     """Effective HTML→PPTX output folder: user override, else Downloads."""
     ov = get_config_overrides().get("pptx_output_dir")
     if ov:
-        return str(Path(str(ov)).expanduser())
+        p = Path(str(ov)).expanduser()
+        if _path_is_reachable(p):
+            return str(p)
     return default_pptx_output_dir()
 
 
@@ -332,6 +387,9 @@ LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 
 # --- Ensure directories exist ---
+# These all live under APP_ROOT. A frozen build placed in a read-only folder
+# (Program Files, a mounted image) fails here, so the error names the root and
+# the fix instead of surfacing a bare PermissionError from an import.
 for d in [
     DATA_DIR,
     INDEX_DIR,
@@ -342,7 +400,48 @@ for d in [
     CLASSIFY_DIR,
     CLASSIFY_PROFILE_DIR,
 ]:
-    d.mkdir(parents=True, exist_ok=True)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise RuntimeError(
+            f"Cannot create the working folder {d} ({e}).\n"
+            f"The app writes its state next to itself, which resolved to:\n"
+            f"    {APP_ROOT}\n"
+            f"Move the folder somewhere writable (for example under "
+            f"%LOCALAPPDATA%) and start again."
+        ) from e
 
 for rt in REPORT_TYPES:
     (DATA_DIR / rt).mkdir(parents=True, exist_ok=True)
+
+
+def _seed_writable_defaults() -> None:
+    """Copy the bundled defaults for user-editable files into APP_ROOT.
+
+    classify/*.txt and queries/query.txt are shipped as defaults AND written
+    back by the UI, so a frozen build cannot keep them in the read-only
+    ASSET_ROOT. Seed them once, then every later run edits the APP_ROOT copy.
+    A no-op when both roots are the same, i.e. in a source checkout.
+    """
+    if APP_ROOT == ASSET_ROOT:
+        return
+    for rel in (
+        "classify/CLINS.txt",
+        "classify/FE.txt",
+        "classify/CE.txt",
+        "queries/query.txt",
+    ):
+        dst = APP_ROOT / rel
+        src = ASSET_ROOT / rel
+        if dst.exists() or not src.exists():
+            continue
+        try:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+        except OSError:
+            # Leaving it absent is safe: the classifier and the retriever both
+            # fall back to the DEFAULT_* literals defined in this module.
+            pass
+
+
+_seed_writable_defaults()

@@ -1,4 +1,5 @@
 <deck project="[PROJECT_NAME]" theme="loreal">
+  <!-- ===== top_banner (repeated on every page) ===== -->
   <component type="title">
     <svg viewBox="0 0 1000 22" width="1000" height="22">
       <text x="0" y="18" font-size="18" font-weight="bold" fill="#333">[PROJECT_NAME]</text>
@@ -9,224 +10,157 @@
       <text x="0" y="11" font-size="11" fill="#c8860d">[FORMULA_REF]</text>
     </svg>
   </component>
-  <component type="description">
-    <svg viewBox="0 0 440 20" width="440" height="20">
-      <text x="12" y="14" font-size="8" fill="#333">[PRODUCT_DESCRIPTION]</text>
+  <!-- ===== left_column: all project metadata (viewBox 200 wide, font 10) ===== -->
+  <component type="meta" label="Type">
+    <svg viewBox="0 0 200 20" width="200" height="20">
+      <text x="8" y="12" font-size="10" fill="#333">[PROJECT_TYPE]</text>
     </svg>
   </component>
-  <component type="meta">
-    <svg viewBox="0 0 1000 16" width="1000" height="16">
-      <text x="0" y="12" font-size="8" fill="#333">
-        <tspan font-weight="bold">Project Type: </tspan>[PROJECT_TYPE]
-        <tspan font-weight="bold"> | Audience: </tspan>[TARGET_AUDIENCE]
-      </text>
+  <component type="meta" label="Audience">
+    <svg viewBox="0 0 200 20" width="200" height="20">
+      <text x="8" y="12" font-size="10" fill="#333">[TARGET_AUDIENCE_LINE_1]</text>
     </svg>
   </component>
-  <component type="meta" region="right_column" label="Communication">
-    <svg viewBox="0 0 380 60" width="380" height="60">
-      <text x="12" y="16" font-size="12" fill="#333">• [CLAIM_1]</text>
-      <text x="12" y="36" font-size="12" fill="#333">• [CLAIM_2]</text>
+  <component type="meta" label="Communication">
+    <svg viewBox="0 0 200 75" width="200" height="75">
+      <text x="8" y="12" font-size="10" fill="#333">• [CLAIM_1]</text>
+      <text x="8" y="27" font-size="10" fill="#333">• [CLAIM_2]</text>
+      <text x="8" y="42" font-size="10" fill="#333">• [CLAIM_3]</text>
+      <text x="8" y="57" font-size="10" fill="#333">• [CLAIM_4]</text>
     </svg>
   </component>
   <component type="info-card" label="Formulation">
-    <svg viewBox="0 0 380 50" width="380" height="50">
-      <text x="12" y="20" font-size="11" fill="#333">[FORMULATION_DETAIL_1]</text>
-      <text x="12" y="38" font-size="11" fill="#333">[FORMULATION_DETAIL_2]</text>
+    <svg viewBox="0 0 200 36" width="200" height="36">
+      <text x="8" y="12" font-size="10" fill="#333">[FORMULATION_DETAIL_1]</text>
+      <text x="8" y="27" font-size="10" fill="#333">[FORMULATION_DETAIL_2]</text>
     </svg>
   </component>
   <component type="info-card" label="Fragrance">
-    <svg viewBox="0 0 380 50" width="380" height="50">
-      <text x="12" y="28" font-size="11" fill="#333">N/A</text>
+    <svg viewBox="0 0 200 36" width="200" height="36">
+      <text x="8" y="12" font-size="10" fill="#333">N/A</text>
     </svg>
   </component>
   <component type="info-card" label="Packaging">
-    <svg viewBox="0 0 380 50" width="380" height="50">
-      <text x="12" y="28" font-size="11" fill="#333">[PACKAGING_SIZE]</text>
+    <svg viewBox="0 0 200 36" width="200" height="36">
+      <text x="8" y="12" font-size="10" fill="#333">[PACKAGING_SIZE]</text>
     </svg>
   </component>
   <component type="info-card" label="Sustainability">
-    <svg viewBox="0 0 380 50" width="380" height="50">
-      <text x="12" y="28" font-size="11" fill="#333">N/A</text>
+    <svg viewBox="0 0 200 36" width="200" height="36">
+      <text x="8" y="12" font-size="10" fill="#333">N/A</text>
     </svg>
   </component>
   <component type="info-card" label="Safety">
-    <svg viewBox="0 0 380 50" width="380" height="50">
-      <text x="12" y="28" font-size="11" fill="#333">[SAFETY_CLAIM]</text>
+    <svg viewBox="0 0 200 36" width="200" height="36">
+      <text x="8" y="12" font-size="10" fill="#333">[SAFETY_CLAIM]</text>
     </svg>
   </component>
+
+  <!-- ===== summary-block: single-column PERFORMANCE SUMMARY band in banner right zone (viewBox 760x88) ===== -->
+  <component type="summary-block">
+    <svg viewBox="0 0 760 88" width="760" height="88" font-family="Arial, sans-serif">
+      <!-- PERFORMANCE SUMMARY: project-subject synthesis; spine: project subject -> evidence & testing -> results & takeaway -->
+      <text x="4" y="12" font-size="9" font-weight="bold" fill="#333">PERFORMANCE SUMMARY:</text>
+      <text x="4" y="25" font-size="8.5" fill="#333">[PROJECT_SUBJECT_LINE]</text>
+      <text x="4" y="38" font-size="8.5" fill="#333">[EVIDENCE_TESTING_LINE]</text>
+      <text x="4" y="51" font-size="8.5" fill="#333">[RESULTS_METRIC_LINE_1]</text>
+      <text x="4" y="64" font-size="8.5" fill="#333">[RESULTS_METRIC_LINE_2]</text>
+      <text x="4" y="77" font-size="8.5" fill="#333">[TAKEAWAY_STAGE_LINE]</text>
+    </svg>
+  </component>
+
+  <!-- ===== core_content: evidence area (viewBox 1000 wide) ===== -->
   <component type="efficacy-table">
-    <svg viewBox="0 0 900 160" width="900" height="160">
-      <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
+    <svg viewBox="0 0 1000 160" width="1000" height="160">
+      <rect x="0" y="0" width="1000" height="30" fill="#f5f5f5" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">[STUDY_TITLE_1] [cn]</text>
       <text x="15" y="45" font-size="10" fill="#666">[STUDY_DESCRIPTION_1]</text>
-      <line x1="0" y1="60" x2="900" y2="60" stroke="#ddd" stroke-width="1" />
+      <line x1="0" y1="60" x2="1000" y2="60" stroke="#ddd" stroke-width="1" />
       <text x="15" y="80" font-size="12" fill="#333">[MEASURE_1]</text>
-      <text x="500" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T4W: [XX.XX%]</text>
-      <text x="700" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T8W: [XX.XX%]</text>
-      <line x1="0" y1="95" x2="900" y2="95" stroke="#eee" stroke-width="1" />
+      <text x="560" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T4W: [XX.XX%]</text>
+      <text x="780" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T8W: [XX.XX%]</text>
+      <line x1="0" y1="95" x2="1000" y2="95" stroke="#eee" stroke-width="1" />
       <text x="15" y="115" font-size="12" fill="#333">[MEASURE_2]</text>
-      <text x="500" y="115" font-size="12" font-weight="bold" fill="#2e7d32">T4W: [XX.XX%]</text>
-      <text x="700" y="115" font-size="12" font-weight="bold" fill="#2e7d32">T8W: [XX.XX%]</text>
-      <line x1="0" y1="130" x2="900" y2="130" stroke="#eee" stroke-width="1" />
+      <text x="560" y="115" font-size="12" font-weight="bold" fill="#2e7d32">T4W: [XX.XX%]</text>
+      <text x="780" y="115" font-size="12" font-weight="bold" fill="#2e7d32">T8W: [XX.XX%]</text>
+      <line x1="0" y1="130" x2="1000" y2="130" stroke="#eee" stroke-width="1" />
       <text x="15" y="150" font-size="12" fill="#333">[MEASURE_3]</text>
-      <text x="500" y="150" font-size="12" font-weight="bold" fill="#2e7d32">T4W: [XX.XX%]</text>
-      <text x="700" y="150" font-size="12" font-weight="bold" fill="#2e7d32">T8W: [XX.XX%]</text>
+      <text x="560" y="150" font-size="12" font-weight="bold" fill="#2e7d32">T4W: [XX.XX%]</text>
+      <text x="780" y="150" font-size="12" font-weight="bold" fill="#2e7d32">T8W: [XX.XX%]</text>
     </svg>
   </component>
   <component type="efficacy-table">
-    <svg viewBox="0 0 900 120" width="900" height="120">
-      <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
+    <svg viewBox="0 0 1000 120" width="1000" height="120">
+      <rect x="0" y="0" width="1000" height="30" fill="#f5f5f5" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">[STUDY_TITLE_2] [us]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_2]</text>
-      <line x1="0" y1="60" x2="900" y2="60" stroke="#ddd" stroke-width="1" />
+      <line x1="0" y1="60" x2="1000" y2="60" stroke="#ddd" stroke-width="1" />
       <text x="15" y="80" font-size="12" fill="#333">[MEASURE_4]</text>
-      <text x="500" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T1w: [XX.XX%]</text>
-      <text x="700" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.XX%]</text>
-      <line x1="0" y1="95" x2="900" y2="95" stroke="#eee" stroke-width="1" />
+      <text x="560" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T1W: [XX.XX%]</text>
+      <text x="780" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.XX%]</text>
+      <line x1="0" y1="95" x2="1000" y2="95" stroke="#eee" stroke-width="1" />
       <text x="15" y="115" font-size="12" fill="#333">[MEASURE_5]</text>
-      <text x="500" y="115" font-size="12" font-weight="bold" fill="#2e7d32">T1W: [XX.XX%]</text>
-      <text x="700" y="115" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.XX%]</text>
+      <text x="560" y="115" font-size="12" font-weight="bold" fill="#2e7d32">T1W: [XX.XX%]</text>
+      <text x="780" y="115" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.XX%]</text>
     </svg>
   </component>
   <component type="efficacy-table">
-    <svg viewBox="0 0 900 90" width="900" height="90">
-      <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
+    <svg viewBox="0 0 1000 90" width="1000" height="90">
+      <rect x="0" y="0" width="1000" height="30" fill="#f5f5f5" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">[STUDY_TITLE_3] [br]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_3]</text>
-      <line x1="0" y1="60" x2="900" y2="60" stroke="#ddd" stroke-width="1" />
+      <line x1="0" y1="60" x2="1000" y2="60" stroke="#ddd" stroke-width="1" />
       <text x="15" y="80" font-size="12" fill="#333">[MEASURE_6]</text>
-      <text x="500" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T1wk: [XX.X%]</text>
-      <text x="700" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T12wk: [XX.X%]</text>
+      <text x="560" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T1Wk: [XX.X%]</text>
+      <text x="780" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T12Wk: [XX.X%]</text>
     </svg>
   </component>
   <component type="efficacy-table">
-    <svg viewBox="0 0 900 90" width="900" height="90">
-      <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
+    <svg viewBox="0 0 1000 90" width="1000" height="90">
+      <rect x="0" y="0" width="1000" height="30" fill="#f5f5f5" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">[STUDY_TITLE_4] [fr]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_4]</text>
-      <line x1="0" y1="60" x2="900" y2="60" stroke="#ddd" stroke-width="1" />
+      <line x1="0" y1="60" x2="1000" y2="60" stroke="#ddd" stroke-width="1" />
       <text x="15" y="80" font-size="12" fill="#333">[MEASURE_7]</text>
-      <text x="500" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T4W: [XX.XX%]</text>
-      <text x="700" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.XX%]</text>
+      <text x="560" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T4W: [XX.XX%]</text>
+      <text x="780" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.XX%]</text>
     </svg>
   </component>
   <component type="efficacy-table">
-    <svg viewBox="0 0 900 90" width="900" height="90">
-      <rect x="0" y="0" width="900" height="30" fill="#f5f5f5" />
+    <svg viewBox="0 0 1000 90" width="1000" height="90">
+      <rect x="0" y="0" width="1000" height="30" fill="#f5f5f5" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#333">[STUDY_TITLE_5] [jp]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_5]</text>
-      <line x1="0" y1="60" x2="900" y2="60" stroke="#ddd" stroke-width="1" />
+      <line x1="0" y1="60" x2="1000" y2="60" stroke="#ddd" stroke-width="1" />
       <text x="15" y="80" font-size="12" fill="#333">[MEASURE_8]</text>
-      <text x="500" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T1h: +[XXX.XX%]</text>
-      <text x="700" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T24h: +[XX.XX%]</text>
+      <text x="560" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T1h: +[XXX.XX%]</text>
+      <text x="780" y="80" font-size="12" font-weight="bold" fill="#2e7d32">T24h: +[XX.XX%]</text>
     </svg>
   </component>
   <component type="consumer-block">
-    <svg viewBox="0 0 900 130" width="900" height="130">
-      <rect x="0" y="0" width="900" height="30" fill="#e3f2fd" />
+    <svg viewBox="0 0 1000 130" width="1000" height="130">
+      <rect x="0" y="0" width="1000" height="30" fill="#e3f2fd" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#1565c0">[CONSUMER_STUDY_TITLE_1] [gb]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_6]</text>
       <text x="15" y="70" font-size="12" fill="#333">• [PERCEPTION_1]</text>
-      <text x="600" y="70" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.X%]</text>
+      <text x="670" y="70" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.X%]</text>
       <text x="15" y="95" font-size="12" fill="#333">• [PERCEPTION_2]</text>
-      <text x="600" y="95" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.X%]</text>
+      <text x="670" y="95" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.X%]</text>
       <text x="15" y="120" font-size="12" fill="#333">• [PERCEPTION_3]</text>
-      <text x="600" y="120" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.X%]</text>
+      <text x="670" y="120" font-size="12" font-weight="bold" fill="#2e7d32">T12W: [XX.X%]</text>
     </svg>
   </component>
   <component type="consumer-block">
-    <svg viewBox="0 0 900 130" width="900" height="130">
-      <rect x="0" y="0" width="900" height="30" fill="#e3f2fd" />
+    <svg viewBox="0 0 1000 130" width="1000" height="130">
+      <rect x="0" y="0" width="1000" height="30" fill="#e3f2fd" />
       <text x="15" y="20" font-size="14" font-weight="bold" fill="#1565c0">[CONSUMER_STUDY_TITLE_2] [in]</text>
       <text x="15" y="45" font-size="10" fill="#666">[N=XX] [STUDY_DESCRIPTION_7]</text>
       <text x="15" y="70" font-size="12" fill="#333">• [PERCEPTION_4]</text>
-      <text x="600" y="70" font-size="12" font-weight="bold" fill="#333333">[TIMEPOINT_1]: [XX.X%]</text>
+      <text x="670" y="70" font-size="12" font-weight="bold" fill="#333333">[TIMEPOINT_1]: [XX.X%]</text>
       <text x="15" y="95" font-size="12" fill="#333">• [PERCEPTION_5]</text>
-      <text x="600" y="95" font-size="12" font-weight="bold" fill="#2e7d32">[TIMEPOINT_2]: [XX.X%]</text>
+      <text x="670" y="95" font-size="12" font-weight="bold" fill="#2e7d32">[TIMEPOINT_2]: [XX.X%]</text>
       <text x="15" y="120" font-size="12" fill="#333">• [PERCEPTION_6]</text>
-      <text x="600" y="120" font-size="12" font-weight="bold" fill="#333333">[TIMEPOINT_1]: [XX.X%]</text>
-    </svg>
-  </component>
-  <component type="summary-block" label="Performance Summary">
-    <svg viewBox="0 0 380 160" width="380" height="160">
-      <text x="12" y="20" font-size="11" fill="#333"><tspan font-weight="bold">OVERALL:</tspan> [OVERALL_SENTENCE_1]</text>
-      <text x="12" y="38" font-size="11" fill="#333">[OVERALL_SENTENCE_2]</text>
-      <text x="12" y="56" font-size="11" fill="#333">[OVERALL_SENTENCE_3]</text>
-      <text x="12" y="82" font-size="11" fill="#333"><tspan font-weight="bold">CLINICAL:</tspan> [CLINS_SENTENCE_WITH_KEY_METRIC] <tspan font-weight="bold" fill="#2e7d32">[-XX.XX% AT T12W]</tspan>.</text>
-      <text x="12" y="108" font-size="11" fill="#333"><tspan font-weight="bold">SENSORY:</tspan> [FE_SENTENCE_WITH_KEY_METRIC] <tspan font-weight="bold" fill="#2e7d32">[+XXX.XX% AT T1H]</tspan>.</text>
-      <text x="12" y="134" font-size="11" fill="#333"><tspan font-weight="bold">CONSUMER:</tspan> <tspan font-weight="bold" fill="#2e7d32">[XX.X% ACCEPTANCE]</tspan> [CE_SENTENCE]; <tspan font-weight="bold" fill="#e07b00">[XX.X% NEEDS ATTENTION]</tspan>.</text>
-    </svg>
-  </component>
-  <!-- Visualization Pages (NEW) -->
-  <component type="efficacy-bar">
-    <svg viewBox="0 0 900 200" width="900" height="200">
-      <text x="50" y="26" font-size="14" font-weight="bold" fill="#333333" font-family="Arial, sans-serif">CLINS Metrics Comparison [—]</text>
-      <line x1="180" y1="45" x2="180" y2="165" stroke="#999999" stroke-width="1" />
-      <text x="172" y="76" font-size="10" fill="#666666" text-anchor="end" font-family="Arial, sans-serif">Study A · Skin hydration</text>
-      <rect x="180" y="63" width="232" height="18" fill="#2e7d32" />
-      <text x="420" y="76" font-size="10" font-weight="bold" fill="#2e7d32" font-family="Arial, sans-serif">-58.00% (T12W)</text>
-      <text x="172" y="111" font-size="10" fill="#666666" text-anchor="end" font-family="Arial, sans-serif">Study B · Wrinkle depth</text>
-      <rect x="180" y="98" width="37" height="18" fill="#e07b00" />
-      <text x="225" y="111" font-size="10" font-weight="bold" fill="#e07b00" font-family="Arial, sans-serif">+9.30% (T8W)</text>
-      <text x="172" y="146" font-size="10" fill="#666666" text-anchor="end" font-family="Arial, sans-serif">Study C · TEWL</text>
-      <rect x="180" y="133" width="50" height="18" fill="#c62828" />
-      <text x="238" y="146" font-size="10" font-weight="bold" fill="#c62828" font-family="Arial, sans-serif">-12.50% (T4W)</text>
-      <text x="50" y="190" font-size="9" fill="#666666" font-family="Arial, sans-serif">Color key: green = positive · orange = cautious · red = negative</text>
-    </svg>
-  </component>
-  <component type="consumer-bar">
-    <svg viewBox="0 0 900 200" width="900" height="200">
-      <text x="50" y="26" font-size="14" font-weight="bold" fill="#333333" font-family="Arial, sans-serif">Consumer Acceptance by Test [—]</text>
-      <line x1="180" y1="45" x2="180" y2="165" stroke="#999999" stroke-width="1" />
-      <text x="172" y="76" font-size="10" fill="#666666" text-anchor="end" font-family="Arial, sans-serif">Test A · GB</text>
-      <rect x="180" y="63" width="535" height="18" fill="#2e7d32" />
-      <text x="723" y="76" font-size="10" font-weight="bold" fill="#2e7d32" font-family="Arial, sans-serif">97.3%</text>
-      <text x="172" y="111" font-size="10" fill="#666666" text-anchor="end" font-family="Arial, sans-serif">Test B · IN</text>
-      <rect x="180" y="98" width="485" height="18" fill="#2e7d32" />
-      <text x="673" y="111" font-size="10" font-weight="bold" fill="#2e7d32" font-family="Arial, sans-serif">88.1%</text>
-      <text x="172" y="146" font-size="10" fill="#666666" text-anchor="end" font-family="Arial, sans-serif">Test C · US</text>
-      <rect x="180" y="133" width="398" height="18" fill="#e07b00" />
-      <text x="586" y="146" font-size="10" font-weight="bold" fill="#e07b00" font-family="Arial, sans-serif">72.4%</text>
-      <text x="50" y="190" font-size="9" fill="#666666" font-family="Arial, sans-serif">Acceptance rate at primary timepoint · scale: 100% = 550 px</text>
-    </svg>
-  </component>
-  <component type="timeseries-line">
-    <svg viewBox="0 0 900 200" width="900" height="200">
-      <text x="50" y="26" font-size="14" font-weight="bold" fill="#333333" font-family="Arial, sans-serif">Metric Trends Over Time [—]</text>
-      <line x1="90" y1="40" x2="90" y2="170" stroke="#999999" stroke-width="1" />
-      <line x1="90" y1="170" x2="720" y2="170" stroke="#999999" stroke-width="1" />
-      <text x="84" y="99" font-size="9" fill="#666666" text-anchor="end" font-family="Arial, sans-serif">+15%</text>
-      <text x="84" y="144" font-size="9" fill="#666666" text-anchor="end" font-family="Arial, sans-serif">0%</text>
-      <text x="84" y="173" font-size="9" fill="#666666" text-anchor="end" font-family="Arial, sans-serif">-10%</text>
-      <text x="100" y="186" font-size="10" fill="#666666" text-anchor="middle" font-family="Arial, sans-serif">T1h</text>
-      <text x="250" y="186" font-size="10" fill="#666666" text-anchor="middle" font-family="Arial, sans-serif">T4W</text>
-      <text x="400" y="186" font-size="10" fill="#666666" text-anchor="middle" font-family="Arial, sans-serif">T8W</text>
-      <text x="550" y="186" font-size="10" fill="#666666" text-anchor="middle" font-family="Arial, sans-serif">T12W</text>
-      <text x="700" y="186" font-size="10" fill="#666666" text-anchor="middle" font-family="Arial, sans-serif">T16W</text>
-      <polyline points="100,134 250,115 400,101 550,94 700,90" fill="none" stroke="#2e7d32" stroke-width="3" />
-      <polyline points="100,145 250,155 400,163 550,168 700,169" fill="none" stroke="#e07b00" stroke-width="3" />
-      <polyline points="100,139 250,136 400,142 550,147 700,149" fill="none" stroke="#c62828" stroke-width="3" />
-      <line x1="540" y1="48" x2="570" y2="48" stroke="#2e7d32" stroke-width="3" />
-      <text x="576" y="52" font-size="9" fill="#333333" font-family="Arial, sans-serif">Skin hydration</text>
-      <line x1="540" y1="66" x2="570" y2="66" stroke="#e07b00" stroke-width="3" />
-      <text x="576" y="70" font-size="9" fill="#333333" font-family="Arial, sans-serif">TEWL</text>
-      <line x1="540" y1="84" x2="570" y2="84" stroke="#c62828" stroke-width="3" />
-      <text x="576" y="88" font-size="9" fill="#333333" font-family="Arial, sans-serif">Firmness</text>
-    </svg>
-  </component>
-  <component type="region-bar">
-    <svg viewBox="0 0 900 200" width="900" height="200">
-      <text x="50" y="26" font-size="14" font-weight="bold" fill="#333333" font-family="Arial, sans-serif">Regional Mean Percentage Change [—]</text>
-      <text x="520" y="26" font-size="9" fill="#666666" font-family="Arial, sans-serif">green = positive · orange = cautious · red = negative</text>
-      <line x1="100" y1="70" x2="800" y2="70" stroke="#eeeeee" stroke-width="1" />
-      <line x1="100" y1="110" x2="800" y2="110" stroke="#eeeeee" stroke-width="1" />
-      <line x1="100" y1="150" x2="800" y2="150" stroke="#999999" stroke-width="1" />
-      <rect x="150" y="98" width="80" height="52" fill="#2e7d32" />
-      <text x="190" y="90" font-size="10" font-weight="bold" fill="#2e7d32" text-anchor="middle" font-family="Arial, sans-serif">CN: +5.2%</text>
-      <rect x="350" y="129" width="80" height="21" fill="#e07b00" />
-      <text x="390" y="121" font-size="10" font-weight="bold" fill="#e07b00" text-anchor="middle" font-family="Arial, sans-serif">US: +2.1%</text>
-      <rect x="550" y="150" width="80" height="38" fill="#c62828" />
-      <text x="590" y="198" font-size="10" font-weight="bold" fill="#c62828" text-anchor="middle" font-family="Arial, sans-serif">FR: -3.8%</text>
+      <text x="670" y="120" font-size="12" font-weight="bold" fill="#333333">[TIMEPOINT_1]: [XX.X%]</text>
     </svg>
   </component>
 </deck>

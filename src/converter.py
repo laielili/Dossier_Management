@@ -17,6 +17,9 @@ Hard constraints handled here:
   - One app instance per batch, Quit() in finally -> no zombie processes.
   - Absolute paths            -> COM Open is path-picky.
   - Idempotent               -> skip if target .pdf already exists.
+  - Early binding preferred, late binding as the fallback -> a broken
+    typelib registration (TYPE_E_CANTLOADLIBRARY) does not take the
+    converter down. See _create_office_app().
 
 Requires: Windows + interactive desktop session + Microsoft Office.
 On headless / Linux / Office-missing setups, `convert_folder` raises
@@ -30,7 +33,9 @@ from .logger import get_logger
 
 logger = get_logger("converter")
 
-# Office COM SaveAs format constants
+# Office COM SaveAs format constants. These are passed POSITIONALLY by
+# the callers: late-bound dispatch (see _create_office_app) rejects
+# keyword arguments outright.
 _PP_SAVE_AS_PDF = 32     # ppSaveAsPDF
 _WD_SAVE_AS_PDF = 17     # wdFormatPDF
 
@@ -118,13 +123,70 @@ def _require_comtypes():
     return comtypes.client
 
 
+def _create_office_app(comtypes_client, prog_id: str, label: str, member: str):
+    """Return an Office Application object that exposes ``member``.
+
+    Early binding (the comtypes default) resolves the application's type
+    library through ``GetModule``, which is what yields typed enums and named
+    arguments. Some Office installations carry a broken typelib registration:
+    GetModule then fails with TYPE_E_CANTLOADLIBRARY (0x8002801D) while the
+    application itself works perfectly well. Late binding (``dynamic=True``)
+    talks to IDispatch directly, needs no typelib, and drives the same
+    automation -- the only difference being that dynamic dispatch accepts
+    positional arguments only, hence the positional FileFormat used below.
+
+    The typelib is probed BEFORE anything is instantiated, deliberately:
+
+      * ``CreateObject()`` given a string progid does not raise on this
+        failure. It hands back a bare ``POINTER(IUnknown)``, so the problem
+        only surfaces later as ``app.Presentations`` blowing up -- which is
+        why an exception-based fallback around CreateObject never fires.
+      * By then CoCreateInstance has already launched POWERPNT.EXE /
+        WINWORD.EXE, and a bare IUnknown exposes no ``Quit()``: the process
+        leaks. Observed for real -- an orphan WINWORD.EXE holding ~170 MB.
+
+    Probing first means the broken path never spawns a process at all. The
+    ``member`` check afterwards is a second guard, covering any other way the
+    typed object could come back unusable.
+
+    Raises ConverterUnavailable only when NEITHER route works, i.e. Office is
+    genuinely absent or COM automation is blocked by policy.
+    """
+    problems: list[str] = []
+
+    try:
+        comtypes_client.GetModule(prog_id)
+    except Exception as e:
+        problems.append(f"typelib unavailable ({type(e).__name__}: {e})")
+    else:
+        try:
+            app = comtypes_client.CreateObject(prog_id)
+            if hasattr(app, member):
+                return app
+            problems.append(
+                f"early binding returned {type(app).__name__} without .{member}"
+            )
+        except Exception as e:
+            problems.append(f"early binding failed ({type(e).__name__}: {e})")
+
+    try:
+        app = comtypes_client.CreateObject(prog_id, dynamic=True)
+    except Exception as e:
+        problems.append(f"late binding failed ({type(e).__name__}: {e})")
+        raise ConverterUnavailable(
+            f"Microsoft {label} is unavailable: " + "; ".join(problems)
+        ) from e
+
+    logger.warning(f"{label}: {problems[-1]}; using late binding.")
+    return app
+
+
 def _convert_pptx_batch(paths: list[Path]) -> list[Path]:
     """Convert many .pptx files using a single PowerPoint instance."""
     comtypes_client = _require_comtypes()
-    try:
-        app = comtypes_client.CreateObject("PowerPoint.Application")
-    except Exception as e:  # Office missing / COM blocked
-        raise ConverterUnavailable(f"Microsoft PowerPoint unavailable: {e}") from e
+    app = _create_office_app(
+        comtypes_client, "PowerPoint.Application", "PowerPoint", "Presentations"
+    )
 
     try:
         try:
@@ -151,7 +213,7 @@ def _convert_pptx_batch(paths: list[Path]) -> list[Path]:
             try:
                 presentation = app.Presentations.Open(os.path.abspath(src))
                 try:
-                    presentation.SaveAs(os.path.abspath(dst), FileFormat=_PP_SAVE_AS_PDF)
+                    presentation.SaveAs(os.path.abspath(dst), _PP_SAVE_AS_PDF)
                 finally:
                     presentation.Close()
                 produced.append(dst)
@@ -170,10 +232,9 @@ def _convert_pptx_batch(paths: list[Path]) -> list[Path]:
 def _convert_docx_batch(paths: list[Path]) -> list[Path]:
     """Convert many .docx files using a single Word instance."""
     comtypes_client = _require_comtypes()
-    try:
-        app = comtypes_client.CreateObject("Word.Application")
-    except Exception as e:  # Office missing / COM blocked
-        raise ConverterUnavailable(f"Microsoft Word unavailable: {e}") from e
+    app = _create_office_app(
+        comtypes_client, "Word.Application", "Word", "Documents"
+    )
 
     try:
         try:
@@ -195,7 +256,7 @@ def _convert_docx_batch(paths: list[Path]) -> list[Path]:
             try:
                 doc = app.Documents.Open(os.path.abspath(src))
                 try:
-                    doc.SaveAs(os.path.abspath(dst), FileFormat=_WD_SAVE_AS_PDF)
+                    doc.SaveAs(os.path.abspath(dst), _WD_SAVE_AS_PDF)
                 finally:
                     doc.Close()
                 produced.append(dst)

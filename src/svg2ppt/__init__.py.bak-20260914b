@@ -181,7 +181,7 @@ class DeckBuilder:
     ``overrides`` is a debug/theme dict applied at build time (never persisted):
       - theme_overrides, chrome_font_scale, margin_scale -> LayoutEngine (template)
       - title_font_scale   -> top_banner content (title / formula-ref)
-      - meta_font_scale    -> DEPRECATED no-op (the banner tagline was removed)
+      - meta_font_scale    -> meta_row content
       - content_font_scale -> left_column / core_content (drives page count)
     """
 

@@ -82,13 +82,6 @@
       <span id="dest-path"></span>
     </div>
 
-    <div class="button-row secondary">
-      <button class="btn btn-danger" id="btn-clear" type="button"
-        title="Permanently delete past-run residuals: all project folders under the Listen Folder + everything in Dossier_condensed/">
-        Clear residual
-      </button>
-    </div>
-
     <!-- stage tracker: hidden until a run starts -->
     <div class="stage-track hidden" id="stage-track">
       <span class="stage" data-stage="scan"><span class="dot">1</span>Scan</span>
@@ -206,32 +199,6 @@
         </div>
       </div>
 
-    </div>
-  </div>
-</div>
-
-<!-- ============ Clear-residual confirmation modal ============ -->
-<div id="clear-modal" class="modal hidden">
-  <div class="modal-backdrop" id="clear-modal-backdrop"></div>
-  <div class="modal-dialog">
-    <div class="modal-head">
-      <h3>Clear past runs?</h3>
-      <button class="modal-close" id="clear-modal-close" type="button" title="Close">&times;</button>
-    </div>
-    <div class="modal-body">
-      <p class="hint" style="color: var(--danger); font-weight: 700;">This action is irreversible.</p>
-      <p class="panel-hint">The <strong>Clear</strong> button deletes the residual left by previous processing runs:</p>
-      <ol class="clear-list">
-        <li>Every <strong>project folder</strong> under the Listen Folder &mdash; i.e. your dossier source files.</li>
-        <li>Everything inside <strong>&lt;Listen Folder&gt;/Dossier_condensed/</strong> &mdash; the condensed per-document PDFs.</li>
-        <li>All <strong>derived state</strong> from previous runs &mdash; the page-text index and the screenshot cache.</li>
-      </ol>
-      <p class="panel-hint" id="clear-paths"></p>
-      <p class="panel-hint" id="clear-warning"></p>
-      <div class="modal-foot">
-        <button class="btn btn-sm btn-outline" id="clear-cancel" type="button">Cancel</button>
-        <button class="btn btn-sm btn-danger" id="clear-confirm" type="button">Delete everything</button>
-      </div>
     </div>
   </div>
 </div>

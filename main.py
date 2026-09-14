@@ -11,7 +11,10 @@ Usage:
 """
 
 import argparse
+import socket
 import sys
+import threading
+import webbrowser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -101,6 +104,26 @@ def cmd_reset(args):
     print(f"Project '{args.project_id}' has been reset.")
 
 
+# Ports tried in order when --port is not given. Same shortlist the bootstrap
+# .bat used to scan with netstat; binding the socket directly is a truer test
+# than parsing netstat output, and it needs no external command.
+PORT_CANDIDATES = (8000, 8001, 8080, 8888, 9000)
+
+
+def _free_port() -> int:
+    """Return the first free port among PORT_CANDIDATES, or give up loudly."""
+    for candidate in PORT_CANDIDATES:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind(("127.0.0.1", candidate))
+            except OSError:
+                continue
+            return candidate
+    raise SystemExit(
+        f"No free port among {PORT_CANDIDATES}. Free one and start again."
+    )
+
+
 def cmd_serve(args):
     import uvicorn
 
@@ -118,26 +141,51 @@ def cmd_serve(args):
     # `reload_excludes` is matched with pathlib.Path.match() -- filename
     # only, no cross-directory `**` -- so use bare directory names
     # ("__pycache__"), NOT globs like "venv/**" (those match nothing).
-    ROOT = Path(__file__).resolve().parent
-    reload_dirs = [
-        str(ROOT / "src"),
-        str(ROOT / "static"),
-    ]
-    reload_excludes = [
-        "__pycache__",
-        "*.pyc",
-    ]
+    # A frozen bundle has no .py sources on disk to watch, and reload=True would
+    # re-launch sys.executable -- which is the packaged exe itself -- as the
+    # reloader child. Hot reload therefore stays available in a source checkout
+    # only.
+    reload_enabled = not getattr(sys, "frozen", False) and not args.no_reload
 
-    print(f"Starting server at http://localhost:{args.port}")
-    print(f"API docs: http://localhost:{args.port}/docs")
-    print("Hot-reload watching source only (src/, static/); venv/ excluded.")
+    port = args.port or _free_port()
+    host = args.host
+    shown = "localhost" if host in ("127.0.0.1", "localhost") else host
+    url = f"http://{shown}:{port}"
+
+    print(f"Starting server at {url}")
+    print(f"API docs: {url}/docs")
+    if reload_enabled:
+        print("Hot-reload watching source only (src/, static/); venv/ excluded.")
+
+    if not args.no_browser:
+        # uvicorn.run blocks the main thread, so the UI has to be opened from a
+        # timer instead of after the call returns. The delay covers interpreter
+        # start-up and app mounting. This replaces the "start http://..." line
+        # the .bat used to run, so the packaged exe is self-contained.
+        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+
+    if not reload_enabled:
+        # Import the app object directly -- with no reloader to spawn there is
+        # no reason to go through uvicorn's import-by-string path.
+        from src.api import app as fastapi_app
+
+        uvicorn.run(fastapi_app, host=host, port=port)
+        return
+
+    ROOT = Path(__file__).resolve().parent
     uvicorn.run(
         "src.api:app",
-        host="0.0.0.0",
-        port=args.port,
+        host=host,
+        port=port,
         reload=True,
-        reload_dirs=reload_dirs,
-        reload_excludes=reload_excludes,
+        reload_dirs=[
+            str(ROOT / "src"),
+            str(ROOT / "static"),
+        ],
+        reload_excludes=[
+            "__pycache__",
+            "*.pyc",
+        ],
     )
 
 
@@ -203,13 +251,38 @@ Examples:
 
     # serve
     p_serve = sub.add_parser("serve", help="Start the API + frontend server")
-    p_serve.add_argument("--port", type=int, default=8000)
+    p_serve.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="Port to listen on. Default: first free port among "
+             + ", ".join(str(p) for p in PORT_CANDIDATES) + ".",
+    )
+    p_serve.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Bind address. Loopback by default, which keeps Windows from "
+             "raising a firewall prompt; use 0.0.0.0 to expose the UI on the "
+             "local network.",
+    )
+    p_serve.add_argument(
+        "--no-reload",
+        action="store_true",
+        help="Disable hot reload. Always off in a packaged build.",
+    )
+    p_serve.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Do not open the UI in the default browser.",
+    )
     p_serve.set_defaults(func=cmd_serve)
 
     args = parser.parse_args()
     if args.command is None:
-        parser.print_help()
-        sys.exit(1)
+        # A double-clicked exe passes no arguments at all, so serving the UI is
+        # the only sensible default. Nothing would be readable if the app just
+        # printed help into a window that closes immediately.
+        args = parser.parse_args(["serve"])
 
     args.func(args)
 

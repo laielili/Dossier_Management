@@ -1,0 +1,13 @@
+# ============================================================
+# Dossier_Management - build-only dependencies
+# ============================================================
+# Needed to produce dist/dossier/ (the OneFolder exe bundle). NOT needed to
+# run the app from source, and deliberately kept out of requirements.txt so a
+# target machine never installs a packer it will not use.
+#
+#   venv/Scripts/python.exe -m pip install -r requirements-build.txt
+#   venv/Scripts/python.exe -m PyInstaller build/dossier.spec \
+#       --workpath build/_pyi --distpath dist
+# ============================================================
+
+pyinstaller>=6.16

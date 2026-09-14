@@ -77,7 +77,7 @@ class Svg2PptxBuildRequest(BaseModel):
     theme_overrides: dict = Field(default_factory=dict)   # structural/theme colors
     chrome_font_scale: float = 1.0   # banner/section-title font multiplier (region chrome)
     title_font_scale: float = 1.0    # top_banner content (title/formula-ref) multiplier
-    meta_font_scale: float = 1.0     # DEPRECATED no-op: banner tagline removed (back-compat)
+    meta_font_scale: float = 1.0     # top_banner description (tagline) multiplier
     content_font_scale: float = 1.0  # shared fallback for all three columns (kept for back-compat)
     left_font_scale: float = 1.0     # left_column content multiplier
     middle_font_scale: float = 1.0   # core_content content multiplier (drives pages)

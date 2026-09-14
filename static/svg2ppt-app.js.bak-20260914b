@@ -44,6 +44,8 @@
   const ovBorder = $("ov-border");
   const ovTitleFont = $("ov-title-font");
   const ovTitleFontVal = $("ov-title-font-val");
+  const ovMetaFont = $("ov-meta-font");
+  const ovMetaFontVal = $("ov-meta-font-val");
 const ovLeftFont = $("ov-left-font");
 const ovLeftFontVal = $("ov-left-font-val");
 const ovMidFont = $("ov-mid-font");
@@ -290,6 +292,7 @@ const ovRightFontVal = $("ov-right-font-val");
         border_color: ovBorder.value,
       },
       title_font_scale: parseFloat(ovTitleFont.value) || 1.0,
+      meta_font_scale: parseFloat(ovMetaFont.value) || 1.0,
       left_font_scale: parseFloat(ovLeftFont.value) || 1.0,
       middle_font_scale: parseFloat(ovMidFont.value) || 1.0,
       right_font_scale: parseFloat(ovRightFont.value) || 1.0,
@@ -349,6 +352,7 @@ const ovRightFontVal = $("ov-right-font-val");
     el.addEventListener("change", scheduleRerender);
   }
   bindScaleControl(ovTitleFont, ovTitleFontVal);
+  bindScaleControl(ovMetaFont, ovMetaFontVal);
   bindScaleControl(ovLeftFont, ovLeftFontVal);
   bindScaleControl(ovMidFont, ovMidFontVal);
   bindScaleControl(ovRightFont, ovRightFontVal);
@@ -416,6 +420,7 @@ const ovRightFontVal = $("ov-right-font-val");
     ovTabBg.value = tov.tab_background || THEME_DEFAULTS.tab_background;
     ovBorder.value = tov.border_color || THEME_DEFAULTS.border_color;
     ovTitleFont.value = p.title_font_scale || 1.0;
+    ovMetaFont.value = p.meta_font_scale || 1.0;
     // Old presets stored a single content_font_scale for all three columns.
     const legacy = p.content_font_scale || 1.0;
     ovLeftFont.value = p.left_font_scale || legacy;
@@ -423,6 +428,7 @@ const ovRightFontVal = $("ov-right-font-val");
     ovRightFont.value = p.right_font_scale || legacy;
     ovMargin.value = p.margin_scale || 1.0;
     ovTitleFontVal.textContent = parseFloat(ovTitleFont.value).toFixed(1) + "×";
+    ovMetaFontVal.textContent = parseFloat(ovMetaFont.value).toFixed(1) + "×";
     ovLeftFontVal.textContent = parseFloat(ovLeftFont.value).toFixed(1) + "×";
     ovMidFontVal.textContent = parseFloat(ovMidFont.value).toFixed(1) + "×";
     ovRightFontVal.textContent = parseFloat(ovRightFont.value).toFixed(1) + "×";
