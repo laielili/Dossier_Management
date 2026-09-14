@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L'Oréal GPT — Dossier Management</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="demo.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <p class="eyebrow">AI Synthesis</p>
+    <h1>L'Oréal GPT</h1>
+    <p class="subtitle">From denoised dossiers to a synthesis deck</p>
+    <nav class="page-nav">
+      <a class="btn btn-sm btn-outline" href="index.html"
+        title="Back to the document pipeline">&lsaquo;&nbsp; Back to Search</a>
+      <a class="btn btn-sm btn-outline" href="svg2ppt.html"
+        title="SVG → PPTX">SVG &rarr; PPTX &rsaquo;</a>
+    </nav>
+  </header>
+
+  <!-- ============ Source documents ============ -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Source Documents <span id="src-count" class="badge">0</span></h2>
+      <span class="param-status">retrieved/&hellip;/AI_feed/</span>
+    </div>
+    <p class="hint">Denoised dossiers handed over by the preprocessing stage. The assistant reads
+      every one of them &mdash; no sampling, no trimming. Two shortcut commands
+      (<code>@extract</code> / <code>@summarize</code>) drive the real client; this demo runs the
+      conversation without them.</p>
+    <div class="sources-strip" id="src-strip"></div>
+  </section>
+
+  <!-- ============ Synthesis session ============ -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Synthesis Session</h2>
+      <span class="param-status" id="chat-status">Connecting&hellip;</span>
+    </div>
+    <p class="hint">The assistant opens the session, states the project in one line, then confirms
+      three things before writing anything: the <strong>project subject &amp; formula numbers</strong>,
+      the <strong>output context</strong>, and the <strong>synthesis outline &amp; project narrative</strong>.
+      On approval it emits the <code>&lt;deck&gt;</code> XML and hands it to the converter.</p>
+
+    <div class="chat-stream" id="chat-stream"></div>
+
+    <div class="chat-chips hidden" id="chat-chips"></div>
+
+    <div class="chat-composer" id="chat-composer">
+      <input type="text" id="chat-input" placeholder="Type a reply&hellip;" autocomplete="off">
+      <button class="btn btn-primary" id="chat-send" type="button">Send</button>
+    </div>
+  </section>
+
+  <!-- Log -->
+  <section class="card">
+    <h2>Log</h2>
+    <pre id="log-area" class="log"></pre>
+  </section>
+
+  <p class="demo-note">Demo build &mdash; the project, the dossiers and every metric shown here are simulated for illustration.</p>
+
+</div>
+
+<script src="demo-data.js"></script>
+<script src="ai-chat.js"></script>
+
+</body>
+</html>

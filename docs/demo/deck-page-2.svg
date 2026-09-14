@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 563" width="1000" height="563" role="img" aria-label="Deck page 2 of 3 - Brazil clinical table, France sensory table, UK consumer block">
+  <title>P-TIOX synthesis deck - page 2 of 3</title>
+  <rect x="0" y="0" width="1000" height="563" fill="#ffffff"/>
+  <rect x="1" y="1" width="998" height="561" fill="none" stroke="#d9a441" stroke-width="2"/>
+
+  <!-- ===== top banner (repeats on every page) ===== -->
+  <rect x="2" y="2" width="996" height="102" fill="#e8c580"/>
+  <line x1="2" y1="104" x2="998" y2="104" stroke="#d9a441" stroke-width="2"/>
+  <text x="22" y="42" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#333333">P-TIOX</text>
+  <text x="22" y="66" font-family="Arial, sans-serif" font-size="14" fill="#c8860d">866420 12</text>
+  <line x1="300" y1="12" x2="300" y2="96" stroke="#d9a441" stroke-width="1.5"/>
+  <rect x="308" y="12" width="684" height="84" fill="#f5e6c6" stroke="#d9a441" stroke-width="1"/>
+  <text x="316" y="28" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#333333">PERFORMANCE SUMMARY:</text>
+  <text x="316" y="42" font-family="Arial, sans-serif" font-size="9" fill="#333333">P-TIOX is a DEV anti-wrinkle project targeting expression lines that Botox</text>
+  <text x="316" y="55" font-family="Arial, sans-serif" font-size="9" fill="#333333">cannot reach. Assessed across 3 clinical tests (N=112), one sensory test and</text>
+  <text x="316" y="68" font-family="Arial, sans-serif" font-size="9" fill="#333333">2 consumer tests (N=192): wrinkle depth -32.4% at T12W and consumer</text>
+  <text x="316" y="81" font-family="Arial, sans-serif" font-size="9" fill="#333333">acceptance 89.0%, with barrier function improving only moderately.</text>
+
+  <!-- ===== left column: eight labelled cards ===== -->
+  <rect x="2" y="104" width="230" height="457" fill="#fdfcf7" stroke="#d9a441" stroke-width="1"/>
+  <rect x="10" y="112" width="214" height="33" fill="#ffffff" stroke="#e6e2d2"/>
+  <rect x="10" y="112" width="214" height="15" fill="#f5e6c6"/>
+  <text x="16" y="123" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#c8860d">TYPE</text>
+  <text x="16" y="139" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">Launch - DEV</text>
+
+  <rect x="10" y="159" width="214" height="46" fill="#ffffff" stroke="#e6e2d2"/>
+  <rect x="10" y="159" width="214" height="15" fill="#f5e6c6"/>
+  <text x="16" y="170" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#c8860d">AUDIENCE</text>
+  <text x="16" y="186" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">Female, 25-55 y.o.</text>
+  <text x="16" y="199" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">all skin types incl. sensitive</text>
+
+  <rect x="10" y="219" width="214" height="72" fill="#ffffff" stroke="#e6e2d2"/>
+  <rect x="10" y="219" width="214" height="15" fill="#f5e6c6"/>
+  <text x="16" y="230" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#c8860d">COMMUNICATION</text>
+  <text x="16" y="246" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">&#8226; Inspired by BOTOX</text>
+  <text x="16" y="259" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">&#8226; Treats areas Botox cannot reach</text>
+  <text x="16" y="272" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">&#8226; Visible results in 4 weeks</text>
+  <text x="16" y="285" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">&#8226; Tested under dermatological control</text>
+
+  <rect x="10" y="305" width="214" height="46" fill="#ffffff" stroke="#e6e2d2"/>
+  <rect x="10" y="305" width="214" height="15" fill="#f5e6c6"/>
+  <text x="16" y="316" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#c8860d">FORMULATION</text>
+  <text x="16" y="332" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">2% SYN-AKE tripeptide &#183; 0.5% HEPES</text>
+  <text x="16" y="345" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">milky lotion</text>
+
+  <rect x="10" y="365" width="214" height="33" fill="#ffffff" stroke="#e6e2d2"/>
+  <rect x="10" y="365" width="214" height="15" fill="#f5e6c6"/>
+  <text x="16" y="376" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#c8860d">FRAGRANCE</text>
+  <text x="16" y="392" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">N/A</text>
+
+  <rect x="10" y="412" width="214" height="33" fill="#ffffff" stroke="#e6e2d2"/>
+  <rect x="10" y="412" width="214" height="15" fill="#f5e6c6"/>
+  <text x="16" y="423" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#c8860d">PACKAGING</text>
+  <text x="16" y="439" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">Airless pump bottle 30 ml</text>
+
+  <rect x="10" y="459" width="214" height="46" fill="#ffffff" stroke="#e6e2d2"/>
+  <rect x="10" y="459" width="214" height="15" fill="#f5e6c6"/>
+  <text x="16" y="470" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#c8860d">SUSTAINABILITY</text>
+  <text x="16" y="486" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">Refillable cartridge</text>
+  <text x="16" y="499" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">78% recycled glass</text>
+
+  <rect x="10" y="519" width="214" height="33" fill="#ffffff" stroke="#e6e2d2"/>
+  <rect x="10" y="519" width="214" height="15" fill="#f5e6c6"/>
+  <text x="16" y="530" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#c8860d">SAFETY</text>
+  <text x="16" y="546" font-family="Arial, sans-serif" font-size="9.5" fill="#333333">Dermatologically tested</text>
+
+  <!-- ===== side tab ===== -->
+  <rect x="986" y="236" width="12" height="110" rx="3" fill="#b8860b"/>
+
+  <!-- ===== core content: study 3 (Brazil clinical) ===== -->
+  <rect x="246" y="118" width="738" height="150" fill="#ffffff" stroke="#d9a441" stroke-width="1"/>
+  <rect x="246" y="118" width="738" height="26" fill="#f5f5f5"/>
+  <text x="258" y="137" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#333333">Brazil T12W clinical test [br]</text>
+  <text x="258" y="158" font-family="Arial, sans-serif" font-size="10" fill="#666666">N=40, female 25-50 &#183; vs marketed reference</text>
+  <line x1="246" y1="168" x2="984" y2="168" stroke="#dddddd" stroke-width="1"/>
+  <text x="258" y="190" font-family="Arial, sans-serif" font-size="11" fill="#333333">Periorbital wrinkle depth</text>
+  <text x="700" y="190" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2e7d32">T4W: -9.8%</text>
+  <text x="850" y="190" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2e7d32">T12W: -19.4%</text>
+  <line x1="246" y1="202" x2="984" y2="202" stroke="#eeeeee" stroke-width="1"/>
+  <text x="258" y="224" font-family="Arial, sans-serif" font-size="11" fill="#333333">Skin smoothness</text>
+  <text x="700" y="224" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2e7d32">T4W: +11.2%</text>
+  <text x="850" y="224" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2e7d32">T12W: +22.6%</text>
+  <line x1="246" y1="236" x2="984" y2="236" stroke="#eeeeee" stroke-width="1"/>
+  <text x="258" y="258" font-family="Arial, sans-serif" font-size="11" fill="#333333">Skin radiance (L*)</text>
+  <text x="700" y="258" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#333333">T4W: +3.1%</text>
+  <text x="850" y="258" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#e07b00">T12W: +6.4%</text>
+
+  <!-- ===== core content: study 4 (France sensory) ===== -->
+  <rect x="246" y="284" width="738" height="150" fill="#ffffff" stroke="#d9a441" stroke-width="1"/>
+  <rect x="246" y="284" width="738" height="26" fill="#f5f5f5"/>
+  <text x="258" y="303" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#333333">France 4W sensory test [fr]</text>
+  <text x="258" y="324" font-family="Arial, sans-serif" font-size="10" fill="#666666">N=24, trained panel &#183; descriptive analysis</text>
+  <line x1="246" y1="334" x2="984" y2="334" stroke="#dddddd" stroke-width="1"/>
+  <text x="258" y="356" font-family="Arial, sans-serif" font-size="11" fill="#333333">Skin smoothness (after feel)</text>
+  <text x="850" y="356" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2e7d32">T4W: +22.5%</text>
+  <line x1="246" y1="368" x2="984" y2="368" stroke="#eeeeee" stroke-width="1"/>
+  <text x="258" y="390" font-family="Arial, sans-serif" font-size="11" fill="#333333">Spreadability</text>
+  <text x="850" y="390" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2e7d32">T4W: +14.0%</text>
+  <line x1="246" y1="402" x2="984" y2="402" stroke="#eeeeee" stroke-width="1"/>
+  <text x="258" y="424" font-family="Arial, sans-serif" font-size="11" fill="#333333">Residue on skin</text>
+  <text x="850" y="424" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#e07b00">T4W: +8.6%</text>
+
+  <!-- ===== core content: consumer block 1 (UK) ===== -->
+  <rect x="246" y="450" width="738" height="102" fill="#ffffff" stroke="#d9a441" stroke-width="1"/>
+  <rect x="246" y="450" width="738" height="26" fill="#e3f2fd"/>
+  <text x="258" y="469" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#1565c0">UK consumer perception test [gb]</text>
+  <text x="258" y="490" font-family="Arial, sans-serif" font-size="10" fill="#666666">N=104, 12-week home-use &#183; vs 866420 11</text>
+  <text x="258" y="512" font-family="Arial, sans-serif" font-size="11" fill="#333333">&#8226; Wrinkles appear less visible</text>
+  <text x="760" y="512" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2e7d32">T12W: 89.0%</text>
+  <text x="258" y="534" font-family="Arial, sans-serif" font-size="11" fill="#333333">&#8226; Skin feels firmer</text>
+  <text x="760" y="534" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2e7d32">T12W: 84.6%</text>
+</svg>

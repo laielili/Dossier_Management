@@ -1,0 +1,263 @@
+/* ============================================================
+   /docs demo build — demo-only chrome
+
+   style.css is a byte-identical copy of static/style.css so the design
+   system stays a true 1:1 replica. Everything that exists only to make
+   the static demo readable (demo footer note, AI transcript view) lives
+   here instead, built strictly from the same CSS variables.
+   ============================================================ */
+
+/* ---------- Footer note ---------- */
+.demo-note {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+
+/* ---------- Sources strip (AI chat page) ---------- */
+.sources-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* ---------- AI transcript ---------- */
+.chat-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.chat-msg {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  animation: chat-in var(--t);
+}
+
+@keyframes chat-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.chat-avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  border: 1px solid var(--line-2);
+  background: var(--surface-sunk);
+  color: var(--ink-2);
+}
+
+.chat-msg.ai .chat-avatar {
+  background: var(--primary-100);
+  border-color: var(--primary);
+  color: var(--primary-700);
+}
+
+.chat-msg.user {
+  flex-direction: row-reverse;
+}
+
+.chat-msg.user .chat-avatar {
+  background: var(--run-100);
+  border-color: var(--run);
+  color: var(--run-700);
+}
+
+.chat-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 94%;
+}
+
+.chat-msg.user .chat-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.chat-sender {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+
+.chat-bubble {
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px 15px;
+  font-size: 13.5px;
+  line-height: 1.62;
+  color: var(--ink);
+}
+
+.chat-msg.ai .chat-bubble {
+  border-left: 3px solid var(--primary);
+}
+
+.chat-msg.user .chat-bubble {
+  background: var(--primary-100);
+  border-color: var(--primary);
+  color: var(--ink);
+}
+
+.chat-bubble p { margin: 0 0 9px; }
+.chat-bubble p:last-child { margin-bottom: 0; }
+.chat-bubble ul { margin: 6px 0 9px; padding-left: 20px; }
+.chat-bubble li { margin-bottom: 3px; }
+.chat-bubble strong { font-weight: 700; }
+.chat-bubble em { font-style: italic; color: var(--ink-2); }
+
+.chat-step-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+/* Typing indicator */
+.chat-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+}
+.chat-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  animation: chat-dot 1.1s ease-in-out infinite;
+}
+.chat-typing span:nth-child(2) { animation-delay: .16s; }
+.chat-typing span:nth-child(3) { animation-delay: .32s; }
+
+@keyframes chat-dot {
+  0%, 60%, 100% { opacity: .28; transform: translateY(0); }
+  30%           { opacity: 1;   transform: translateY(-3px); }
+}
+
+/* ---------- Quick replies ---------- */
+.chat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line-2);
+}
+.chat-chips .btn { text-align: left; white-space: normal; }
+
+/* ---------- Composer ---------- */
+.chat-composer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.chat-composer input {
+  flex: 1 1 auto;
+  padding: 11px 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--ink);
+  outline: none;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.chat-composer input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+/* ---------- Deck summary table (key -> value) ---------- */
+.chat-kv {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.chat-kv th,
+.chat-kv td {
+  text-align: left;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.chat-kv tr:last-child th,
+.chat-kv tr:last-child td { border-bottom: none; }
+.chat-kv th {
+  width: 132px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface-sunk);
+  white-space: nowrap;
+}
+.chat-kv td { color: var(--ink); font-family: var(--font-mono); font-size: 12px; }
+
+/* ---------- Deck XML block ---------- */
+.xml-block {
+  background: #26261F;
+  color: var(--on-dark);
+  padding: 13px 15px;
+  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  overflow: auto;
+  max-height: 360px;
+  white-space: pre;
+  margin: 4px 0 10px;
+  tab-size: 2;
+}
+
+/* ---------- Hand-off notice ---------- */
+.handoff {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--primary-100);
+  border: 1px solid var(--primary);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--primary-700);
+  font-weight: 600;
+}
+.handoff .handoff-text { flex: 1 1 auto; }
+.handoff .handoff-count { font-variant-numeric: tabular-nums; }
+
+/* ---------- Result meta line ---------- */
+.meta-line {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  margin-top: 6px;
+}

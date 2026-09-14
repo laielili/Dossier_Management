@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SVG &rarr; PPTX — Dossier Management</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="demo.css">
+<style>
+  .preview-strip { display:flex; flex-direction:column; gap:14px; max-height:72vh; overflow:auto; padding:4px; }
+  .preview-page { text-align:center; }
+  .preview-page .page-cap { font-size:12px; color:#777; margin:4px 0 2px; }
+  .preview-page img { width:100%; max-width:1000px; height:auto; border:1px solid #d9a441; display:block; margin:0 auto; background:#fff; }
+
+  /* Adjustment panel layout: side-by-side collapsible groups */
+  .adjustment-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .adjustment-row > .form-row { margin-bottom: 0; }
+
+  .collapsible {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-sm);
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .collapsible-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface-sunk);
+    border: none;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+  }
+  .collapsible-header:hover { background: var(--surface-sunk-2); }
+  .collapsible-header .chevron {
+    font-size: 12px;
+    color: var(--ink-3);
+    transition: transform var(--t-fast);
+  }
+  .collapsible:not(.collapsed) .collapsible-header .chevron { transform: rotate(90deg); }
+
+  .collapsible-content {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .collapsible.collapsed .collapsible-content { display: none; }
+
+  .collapsible-content .form-row { margin-bottom: 0; }
+  .collapsible-content .form-row label { min-width: 80px; }
+  .collapsible-content .param-hint { margin-bottom: 0; }
+
+  /* Output-mode radio group inside Options */
+  .output-mode-group {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .output-mode-group .checkbox-inline { font-size: 14px; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <p class="eyebrow">Deck Conversion Utility</p>
+    <h1>SVG &rarr; PPTX</h1>
+    <p class="subtitle">From SVG components to PowerPoint deck</p>
+    <nav class="page-nav">
+      <a class="btn btn-sm btn-outline" href="index.html"
+        title="Back to the document pipeline">&lsaquo;&nbsp; Back to Home</a>
+      <a class="btn btn-sm btn-outline" href="ai-chat.html"
+        title="Back to the AI synthesis session">L'Oréal GPT &rsaquo;</a>
+    </nav>
+  </header>
+
+  <!-- ============ Deck XML ============ -->
+  <section class="card convert-card">
+    <div class="card-head">
+      <h2>Deck XML</h2>
+    </div>
+    <p class="hint">
+      Paste the <strong>deck XML</strong> produced by the downstream AI. Each
+      <code>&lt;component type="..."&gt;</code> wraps one content-only
+      <code>&lt;svg&gt;</code>; the server routes it into a region and lays out the
+      whole page. Markdown code fences (<code>```xml</code>) are stripped automatically.
+      In this demo the box is pre-loaded by the AI synthesis session whenever you arrive from there.
+    </p>
+
+    <textarea id="xml-input" class="code-input" spellcheck="false"
+      placeholder="&lt;?xml version=&quot;1.0&quot;?&gt;&#10;&lt;deck project=&quot;P-TIOX&quot;&gt;&#10;  &lt;component type=&quot;title&quot;&gt;&lt;svg viewBox=&quot;0 0 800 40&quot;&gt;…&lt;/svg&gt;&lt;/component&gt;&#10;  …&#10;&lt;/deck&gt;"></textarea>
+
+    <div class="code-toolbar">
+      <span class="code-stat" id="code-stat">0 characters</span>
+      <span class="code-toolbar-spacer"></span>
+      <button class="btn btn-sm btn-outline" id="btn-paste" type="button"
+        title="Paste from clipboard">Paste</button>
+      <button class="btn btn-sm btn-outline" id="btn-sample" type="button"
+        title="Load the sample deck so you can verify the pipeline">Sample</button>
+      <button class="btn btn-sm btn-outline" id="btn-clear" type="button"
+        title="Clear the editor">Clear</button>
+    </div>
+  </section>
+
+  <!-- ============ Options ============ -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Options</h2>
+    </div>
+
+    <div class="form-row">
+      <label for="file-name">File name</label>
+      <div class="folder-input-group">
+        <input type="text" id="file-name" value="synthesis_deck" autocomplete="off">
+        <span class="suffix-tag">.pptx</span>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>Output mode</label>
+      <div class="output-mode-group">
+        <label class="checkbox-inline" title="Component groups with editable text overlays — text and components stay selectable in PowerPoint (experimental)">
+          <input type="radio" name="output-mode" value="editable" checked>
+          Editable
+        </label>
+        <label class="checkbox-inline" title="Each slide is one full-page image — pixel-perfect, nothing editable">
+          <input type="radio" name="output-mode" value="classic">
+          Classic (grouped as one image)
+        </label>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label for="build-mode">Build mode</label>
+      <div class="folder-input-group">
+        <select id="build-mode" style="flex:1;">
+          <option value="single_formula">Single-Formula</option>
+          <!-- future modes appended here, e.g. <option value="multi_formula">Multi-Formula</option> -->
+        </select>
+      </div>
+    </div>
+
+    <div class="button-row" style="margin-top:14px;">
+      <button class="btn btn-accent btn-run-all" id="btn-build" type="button"
+        title="Build the deck and write the .pptx">&#9654;&nbsp; Build Deck</button>
+    </div>
+  </section>
+
+  <!-- ============ Output folder (saved destination) ============ -->
+  <section class="card" id="output-folder-card">
+    <div class="card-head">
+      <h2>Output Folder</h2>
+    </div>
+    <div class="form-row">
+      <label for="output-folder">Folder</label>
+      <div class="folder-input-group">
+        <input type="text" id="output-folder" placeholder="e.g. C:\Users\you\Downloads" autocomplete="off">
+        <button class="btn btn-sm btn-outline" id="btn-browse-folder" type="button"
+          title="Open a folder picker">Browse</button>
+        <button class="btn btn-sm btn-outline" id="btn-save-folder" type="button"
+          title="Save this folder as the default output location">Save Path</button>
+      </div>
+    </div>
+    <p class="hint param-hint" id="folder-note"></p>
+  </section>
+
+  <!-- ============ Result ============ -->
+  <section class="card hidden" id="result-card">
+    <div class="card-head">
+      <h2>Result</h2>
+    </div>
+    <p class="success" id="result-text"></p>
+    <div class="prep-actions">
+      <button class="btn btn-primary" id="btn-download" type="button"
+        title="Save the deck to the configured output folder">Save to folder</button>
+      <button class="btn btn-outline" id="btn-preview" type="button">Preview</button>
+    </div>
+    <p class="muted" id="result-meta"></p>
+    <p class="success hidden" id="save-status"></p>
+    <div id="result-warnings" class="warnings hidden"></div>
+  </section>
+
+  <!-- ============ Inline Preview ============ -->
+  <section class="card hidden" id="preview-card">
+    <div class="card-head">
+      <h2>Preview</h2>
+      <button class="btn btn-sm btn-outline" id="btn-preview-hide" type="button">Hide</button>
+    </div>
+    <div class="preview-strip" id="preview-strip"></div>
+  </section>
+
+  <!-- ============ Debug / Theme overrides ============ -->
+  <section class="card hidden" id="debug-card">
+    <div class="card-head">
+      <h2>Adjustments</h2>
+      <span class="param-status" id="debug-hint">Runtime Configuration</span>
+    </div>
+    <p class="hint">Tune the look without re-pasting the XML. Changes re-render the deck
+      live (debounced); the <strong>Preview</strong> and <strong>Download</strong> button
+      always reflect the latest version.</p>
+
+    <div class="adjustment-row">
+      <div class="collapsible collapsed" id="collapsible-color">
+        <button class="collapsible-header" type="button" aria-expanded="false">
+          <span>Color</span>
+          <span class="chevron">▶</span>
+        </button>
+        <div class="collapsible-content">
+          <div class="form-row">
+            <label for="ov-accent">Accent</label>
+            <input type="color" id="ov-accent" value="#c8860d">
+          </div>
+          <div class="form-row">
+            <label for="ov-header-bg">Header bg</label>
+            <input type="color" id="ov-header-bg" value="#e8c580">
+          </div>
+          <div class="form-row">
+            <label for="ov-meta-bg">Summary bg</label>
+            <input type="color" id="ov-meta-bg" value="#f5e6c6">
+          </div>
+          <div class="form-row">
+            <label for="ov-tab-bg">Side tab bg</label>
+            <input type="color" id="ov-tab-bg" value="#b8860b">
+          </div>
+          <div class="form-row">
+            <label for="ov-border">Border</label>
+            <input type="color" id="ov-border" value="#d9a441">
+          </div>
+        </div>
+      </div>
+
+      <div class="collapsible collapsed" id="collapsible-font-size">
+        <button class="collapsible-header" type="button" aria-expanded="false">
+          <span>Font Size</span>
+          <span class="chevron">▶</span>
+        </button>
+        <div class="collapsible-content">
+          <div class="form-row">
+            <label for="ov-title-font">Title</label>
+            <div class="folder-input-group">
+              <input type="range" id="ov-title-font" min="0.5" max="2.0" value="1.0" step="0.1">
+              <span class="param-status" id="ov-title-font-val">1.0×</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label for="ov-left-font">Metadata column</label>
+            <div class="folder-input-group">
+              <input type="range" id="ov-left-font" min="0.5" max="2.0" value="1.0" step="0.1">
+              <span class="param-status" id="ov-left-font-val">1.0×</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label for="ov-mid-font">Evidence area</label>
+            <div class="folder-input-group">
+              <input type="range" id="ov-mid-font" min="0.5" max="2.0" value="1.0" step="0.1">
+              <span class="param-status" id="ov-mid-font-val">1.0×</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label for="ov-right-font">Banner Summary</label>
+            <div class="folder-input-group">
+              <input type="range" id="ov-right-font" min="0.5" max="2.0" value="1.0" step="0.1">
+              <span class="param-status" id="ov-right-font-val">1.0×</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label for="ov-margin">Card margin</label>
+      <div class="folder-input-group">
+        <input type="range" id="ov-margin" min="0.5" max="2.0" value="1.0" step="0.1">
+        <span class="param-status" id="ov-margin-val">1.0×</span>
+      </div>
+    </div>
+    <p class="hint param-hint">Scales every region padding + inter-component gap. Larger → less fits per page → <strong>more pages</strong>.</p>
+
+    <div class="adjustment-row">
+      <div class="form-row">
+        <label for="max-pages">Max pages</label>
+        <div class="folder-input-group">
+          <input type="range" id="max-pages" min="0" max="20" value="0" step="1">
+          <span class="param-status" id="max-pages-val">0 (auto)</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="dpi">Render DPI</label>
+        <input type="number" id="dpi" value="150" min="72" max="300">
+      </div>
+    </div>
+    <p class="hint param-hint"><strong>0 = no cap</strong> (add pages, full fidelity). A positive value is a <strong>hard cap</strong>: the engine compresses the overflow column &mdash; font-size, vertical spacing, inter-card gap and intra-card horizontal whitespace &mdash; until the deck fits. The density factor is near-unbounded (floor 0.15), so readability is sacrificed when needed to honor the cap.</p>
+
+    <div class="button-row" style="margin-top:14px;">
+      <button class="btn btn-accent" id="btn-rerender" type="button"
+        title="Re-render the deck with current overrides">&#8635;&nbsp; Re-render</button>
+    </div>
+
+    <hr style="margin:18px 0; border:none; border-top:1px solid #eee;">
+
+    <div class="card-head"><h3>Presets</h3></div>
+    <div class="form-row">
+      <label for="preset-name">Name</label>
+      <div class="folder-input-group">
+        <input type="text" id="preset-name" placeholder="e.g. compact" autocomplete="off">
+        <button class="btn btn-sm btn-outline" id="btn-preset-save" type="button">Save</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <label for="preset-select">Load</label>
+      <div class="folder-input-group">
+        <select id="preset-select" style="flex:1;">
+          <option value="">— saved presets —</option>
+        </select>
+        <button class="btn btn-sm btn-outline" id="btn-preset-delete" type="button">Delete</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Log -->
+  <section class="card">
+    <h2>Log</h2>
+    <pre id="log-area" class="log"></pre>
+  </section>
+
+  <p class="demo-note">Demo build &mdash; the deck is pre-rendered and the saved file is simulated; no .pptx is written.</p>
+
+</div>
+
+  <!-- ============ Folder picker modal ============ -->
+  <div id="folder-modal" class="modal hidden">
+    <div class="modal-backdrop" id="folder-modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3>Select an output folder</h3>
+        <button class="modal-close" id="folder-modal-close" type="button" title="Close">&times;</button>
+      </div>
+      <div class="saved-paths-block">
+        <div id="saved-paths-list" class="saved-paths-list"></div>
+      </div>
+      <div id="folder-current" class="folder-current"></div>
+      <div id="folder-list" class="folder-list"></div>
+      <div class="modal-foot">
+        <button class="btn btn-sm btn-outline" id="folder-up" type="button" title="Go up one level">Up</button>
+        <button class="btn btn-sm btn-primary" id="folder-select" type="button"
+          title="Use the current folder for generated PPTX files">Select this folder</button>
+      </div>
+    </div>
+  </div>
+
+<script src="demo-data.js"></script>
+<script src="svg2ppt-app.js"></script>
+
+</body>
+</html>

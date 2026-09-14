@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Performance Dossier Management — Dossier Search</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="demo.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Top-right corner: Config (classification vocabulary & noise filtering) -->
+  <button class="btn btn-sm btn-outline config-corner" id="btn-config" type="button"
+    title="Open configuration (classification vocabulary &amp; noise filtering)">Config</button>
+
+  <!-- Header -->
+  <header class="header">
+    <p class="eyebrow">Document Retrieval &amp; Preprocessing</p>
+    <h1>Performance Dossier Management</h1>
+    <p class="subtitle">A route to AI synthesis</p>
+    <nav class="page-nav">
+      <a class="btn btn-sm btn-outline" href="svg2ppt.html"
+        title="SVG → PPTX">SVG &rarr; PPTX &rsaquo;</a>
+    </nav>
+  </header>
+
+  <!-- Stepper -->
+  <div class="stepper">
+    <button class="step-pill active" data-step="1" type="button" id="pill-1">
+      <span class="num">1</span><span class="lbl">Search &amp; Select</span>
+    </button>
+    <button class="step-pill" data-step="2" type="button" id="pill-2">
+      <span class="num">2</span><span class="lbl">Preprocess</span>
+    </button>
+  </div>
+
+  <!-- ============ STEP 1: Search & Select ============ -->
+  <section class="step-page active" id="step-1">
+
+    <!-- Search target path + filters + start -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Search Target Path</h2>
+      </div>
+      <p class="hint">Choose the folder to search (including its subfolders) for dossier files
+        (<code>pdf</code>, <code>pptx</code>, <code>docx</code>, <code>xlsx</code>).</p>
+
+      <div class="form-row">
+        <label for="search-path">Target Path</label>
+        <div class="folder-input-group">
+          <input type="text" id="search-path" placeholder="e.g. D:\Projects\Dossiers" autocomplete="off">
+          <button class="btn btn-sm btn-outline" id="btn-browse-search" type="button"
+            title="Open a folder picker to choose the search target">Browse</button>
+          <button class="btn btn-sm btn-outline" id="btn-save-search" type="button"
+            title="Save this folder path for quick re-use across restarts">Save Path</button>
+        </div>
+      </div>
+
+      <div class="search-filters">
+        <div class="form-row column keywords-row">
+          <label for="kw1">Keywords</label>
+          <div class="keywords-stack">
+            <input type="text" id="kw1" placeholder="keyword 1">
+            <input type="text" id="kw2" placeholder="keyword 2 (optional)">
+            <input type="text" id="kw3" placeholder="keyword 3 (optional)">
+          </div>
+        </div>
+
+        <div class="date-filter-row">
+          <label class="date-filter-label">
+            <input type="checkbox" id="date-enabled" checked>
+            <span>Last-modified date within</span>
+          </label>
+          <div class="date-inputs" id="date-inputs" hidden>
+            <input type="number" id="date-years" value="1" min="0" max="50">
+            <span class="unit">years</span>
+            <input type="number" id="date-months" value="0" min="0" max="11">
+            <span class="unit">months</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="button-row search-button-row">
+        <button class="btn btn-start-search" id="btn-search" type="button">&#9654;&nbsp; Start</button>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section class="card hidden" id="results-card">
+      <div class="card-head">
+        <h2>Results <span id="result-count" class="badge">0</span></h2>
+        <div class="card-actions">
+          <label class="checkbox-inline"><input type="checkbox" id="select-all"> Select all</label>
+        </div>
+      </div>
+      <div class="results-scroll">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th class="col-check"></th>
+              <th class="col-icon">Type</th>
+              <th class="col-name">File name</th>
+              <th class="col-type">Size</th>
+              <th class="col-mod">Last modified</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+      <div id="results-empty" class="results-empty hidden">No files matched the current filter.</div>
+
+      <div class="project-name-row">
+        <label for="project-name">Project name</label>
+        <input type="text" id="project-name" placeholder="e.g. Project-2026-Q3" autocomplete="off">
+        <button class="btn btn-primary" id="btn-next" type="button">Next &rsaquo; Preprocess</button>
+      </div>
+    </section>
+  </section>
+
+  <!-- ============ STEP 2: Preprocess ============ -->
+  <section class="step-page" id="step-2">
+    <section class="card run-card">
+      <h2>Preprocessing: <span id="prep-project"></span></h2>
+      <p class="hint">Selected files are now running through <strong>scan &rarr; classify &rarr; ingest &rarr; condense</strong>
+        (in place &mdash; no copies are made). Denoised PDFs land in
+        <code>retrieved/<span id="prep-folder"></span>/AI_feed/<span id="prep-folder-2"></span>/</code>
+        &mdash; the file explorer opens at <code>retrieved/<span id="prep-folder-3"></span>/AI_feed/</code>,
+        drag the <strong><span id="prep-folder-4"></span></strong> folder straight into the downstream AI client.
+        pptx/docx are converted to PDF (when Office is available); xlsx is left unprocessed.</p>
+
+      <div class="stage-track hidden" id="stage-track">
+        <span class="stage" data-stage="scan"><span class="dot">1</span>Scan</span>
+        <span class="stage-sep"></span>
+        <span class="stage" data-stage="classify"><span class="dot">2</span>Classify</span>
+        <span class="stage-sep"></span>
+        <span class="stage" data-stage="ingest"><span class="dot">3</span>Ingest</span>
+        <span class="stage-sep"></span>
+        <span class="stage" data-stage="condense"><span class="dot">4</span>Condense</span>
+      </div>
+      <p class="muted hidden" id="prep-progress" style="margin-top:8px;"></p>
+
+      <div id="prep-result" class="hidden" style="margin-top:14px;">
+        <p class="success" id="prep-result-text"></p>
+        <div class="prep-actions">
+          <a class="btn btn-accent" id="btn-loreal-gpt" href="ai-chat.html"
+            title="Open the downstream AI synthesis client (demo)">
+          L'Oréal GPT
+          </a>
+          <a class="btn btn-accent btn-next-step" id="btn-svg2ppt" href="svg2ppt.html"
+            title="Go to the SVG → PPT conversion page">
+            SVG → PPT
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <div class="step-nav">
+      <button class="btn btn-outline btn-back" id="btn-back" type="button">&lsaquo; Back to Search</button>
+    </div>
+  </section>
+
+  <!-- Log -->
+  <section class="card">
+    <h2>Log</h2>
+    <pre id="log-area" class="log"></pre>
+  </section>
+
+  <p class="demo-note">Demo build &mdash; pipeline, files and metrics on this page are simulated for illustration.</p>
+
+</div>
+
+<!-- ============ Folder picker modal ============ -->
+<div id="folder-modal" class="modal hidden">
+  <div class="modal-backdrop" id="folder-modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <h3>Select a folder</h3>
+      <button class="modal-close" id="folder-modal-close" type="button" title="Close">&times;</button>
+    </div>
+    <div class="saved-paths-block">
+      <div id="saved-paths-list" class="saved-paths-list"></div>
+    </div>
+    <div id="folder-current" class="folder-current"></div>
+    <div id="folder-list" class="folder-list"></div>
+    <div class="modal-foot">
+      <button class="btn btn-sm btn-outline" id="folder-up" type="button" title="Go up one level">Up</button>
+      <button class="btn btn-sm btn-primary" id="folder-select" type="button"
+        title="Use the current folder as the search target">Select this folder</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Configuration modal ============ -->
+<div id="config-modal" class="modal hidden">
+  <div class="modal-backdrop" id="config-modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <h3>Configuration</h3>
+      <button class="modal-close" id="config-modal-close" type="button" title="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- 1. Classification vocabulary (collapsible) -->
+      <div class="accordion" id="acc-classification">
+        <button class="accordion-head" type="button" id="acc-head-classification"
+          aria-expanded="false" aria-controls="acc-body-classification">
+          <span class="accordion-title">Classification vocabulary</span>
+          <span class="accordion-chevron">&#9662;</span>
+        </button>
+        <div class="accordion-body" id="acc-body-classification">
+          <p class="panel-hint">Classification frame: uses keywords from each document's first 1&ndash;2 pages to auto-sort it into CLINS / FE (Sensory) / CE.</p>
+          <div class="query-editor" data-type="CLINS">
+            <label>CLINS &mdash; Clinical</label>
+            <textarea id="profile-CLINS" rows="3"></textarea>
+          </div>
+          <div class="query-editor" data-type="FE">
+            <label>FE &mdash; Sensory</label>
+            <textarea id="profile-FE" rows="3"></textarea>
+          </div>
+          <div class="query-editor" data-type="CE">
+            <label>CE &mdash; Consumer Evaluation</label>
+            <textarea id="profile-CE" rows="3"></textarea>
+          </div>
+          <button class="btn btn-sm btn-outline" id="btn-save-profiles"
+            title="Write the edited classification anchors back to classify/*.txt">Save</button>
+        </div>
+      </div>
+
+      <!-- 2. Noise filtering (collapsible) -->
+      <div class="accordion" id="acc-noise">
+        <button class="accordion-head" type="button" id="acc-head-noise"
+          aria-expanded="false" aria-controls="acc-body-noise">
+          <span class="accordion-title">Noise Filtering</span>
+          <span class="accordion-chevron">&#9662;</span>
+        </button>
+        <div class="accordion-body" id="acc-body-noise">
+          <div class="noise-filter-title">
+            <span>Noise Filtering</span>
+            <span class="badge-on">always on</span>
+          </div>
+          <p class="noise-filter-desc">
+            Pages are <strong>kept by default</strong> and deleted only when provably noise.
+            <span class="muted">Veto terms rescue evidence-bearing pages; cover pages are always dropped. <em>Cover</em> = no table, no list, &lt;3 figures, largest font &ge;20pt, and &lt;60 chars.</span>
+          </p>
+
+          <div class="noise-section">
+            <div class="noise-section-title">Deleted noise types</div>
+            <div id="noise-cats" class="chip-row"></div>
+          </div>
+
+          <div class="noise-section">
+            <div class="noise-section-title">Query lexicon <span class="muted">(queries/query.txt)</span></div>
+            <div class="query-editor">
+              <label for="query-txt">Title Anchors + Table Features &rarr; veto terms (rescue evidence-bearing pages)</label>
+              <textarea id="query-txt" rows="10"></textarea>
+            </div>
+            <button class="btn btn-sm btn-outline" id="btn-save-query"
+              title="Write the edited query lexicon back to queries/query.txt">Save</button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="demo-data.js"></script>
+<script src="search-app.js"></script>
+
+</body>
+</html>
